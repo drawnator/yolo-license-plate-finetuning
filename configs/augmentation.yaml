@@ -1,0 +1,30 @@
+# Augmentation configuration for license plate detection
+# =========================================================
+# These settings are passed directly to the Ultralytics YOLO trainer.
+# Adjust values based on your dataset characteristics.
+
+# --- Geometric augmentations ---
+degrees: 5.0          # random rotation (±degrees)
+translate: 0.1        # random translation (fraction of image size)
+scale: 0.5            # random scale (±fraction)
+shear: 2.0            # random shear (±degrees)
+perspective: 0.001    # random perspective distortion
+flipud: 0.0           # vertical flip probability (not useful for plates)
+fliplr: 0.5           # horizontal flip probability
+
+# --- Colour augmentations ---
+hsv_h: 0.015          # hue shift (fraction of 360°)
+hsv_s: 0.7            # saturation multiplier range
+hsv_v: 0.4            # value (brightness) multiplier range
+
+# --- Advanced augmentations ---
+mosaic: 1.0           # mosaic probability (combines 4 images)
+mixup: 0.1            # mixup probability (blends 2 images)
+copy_paste: 0.1       # copy-paste augmentation probability
+close_mosaic: 10      # disable mosaic for last N epochs
+
+# --- Blur / noise (useful for simulating dirty/blurry plates) ---
+blur: 0.01            # Gaussian blur probability
+median_blur: 0.0      # median blur probability
+to_gray: 0.01         # grayscale conversion probability
+clahe: 0.01           # CLAHE equalisation probability

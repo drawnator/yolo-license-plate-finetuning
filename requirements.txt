@@ -1,0 +1,24 @@
+# Core ML / YOLO
+ultralytics>=8.3.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Computer vision utilities
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Data / numerical
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualisation
+matplotlib>=3.7.0
+
+# Experiment tracking (optional)
+# wandb>=0.16.0
+# mlflow>=2.9.0
+
+# Misc
+PyYAML>=6.0
+tqdm>=4.65.0
+requests>=2.31.0

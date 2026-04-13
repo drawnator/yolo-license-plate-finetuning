@@ -1,0 +1,35 @@
+# YOLO License Plate Fine-tuning – CPU-only Dockerfile
+# =====================================================
+# Use when no GPU is available (training will be much slower).
+
+FROM python:3.11-slim
+
+LABEL maintainer="drawnator"
+LABEL description="YOLO license plate fine-tuning environment (CPU)"
+
+# ── System packages ────────────────────────────────────────────────────────────
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        wget \
+        curl \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python dependencies ────────────────────────────────────────────────────────
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# ── Copy project files ─────────────────────────────────────────────────────────
+COPY . .
+
+# ── Default command ────────────────────────────────────────────────────────────
+CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO CPU environment ready.')"]

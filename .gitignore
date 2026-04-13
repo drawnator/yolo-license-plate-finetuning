@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# ML/DL artifacts
+runs/
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+*.pb
+*.torchscript
+
+# Dataset (add your dataset folder here if needed)
+datasets/
+data/images/
+data/labels/
+
+# Logs
+*.log
+logs/
+wandb/
+mlruns/
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
