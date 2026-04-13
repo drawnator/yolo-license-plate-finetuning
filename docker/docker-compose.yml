@@ -1,0 +1,89 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Common environment variables shared by all services
+# ──────────────────────────────────────────────────────────────────────────────
+x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Volume mounts
+# ──────────────────────────────────────────────────────────────────────────────
+x-volumes: &volumes
+  - ./data:/app/data          # dataset directory
+  - ./runs:/app/runs          # training & prediction outputs
+  - ./configs:/app/configs    # config files
+
+services:
+  # ── GPU training service ────────────────────────────────────────────────────
+  train-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: yolo-license-plate:gpu
+    container_name: yolo_train_gpu
+    environment:
+      <<: *common-env
+    volumes: *volumes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: python training/train_yolov8.py
+    # Override with: docker compose run train-gpu python training/train_yolov5.py
+
+  # ── CPU training service (no GPU required) ──────────────────────────────────
+  train-cpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    image: yolo-license-plate:cpu
+    container_name: yolo_train_cpu
+    environment:
+      <<: *common-env
+    volumes: *volumes
+    command: python training/train_yolov8.py --device cpu
+
+  # ── Evaluation service ──────────────────────────────────────────────────────
+  evaluate:
+    image: yolo-license-plate:gpu
+    container_name: yolo_evaluate
+    environment:
+      <<: *common-env
+    volumes: *volumes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python evaluation/evaluate.py
+        --weights /app/runs/train/yolov8_license_plate/weights/best.pt
+        --data    /app/data.yaml
+        --device  0
+
+  # ── Inference service ───────────────────────────────────────────────────────
+  inference:
+    image: yolo-license-plate:gpu
+    container_name: yolo_inference
+    environment:
+      <<: *common-env
+    volumes: *volumes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      python inference/predict_batch.py
+        --weights /app/runs/train/yolov8_license_plate/weights/best.pt
+        --source  /app/data/images/test
+        --device  0

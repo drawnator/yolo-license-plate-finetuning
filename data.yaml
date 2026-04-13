@@ -1,0 +1,15 @@
+# Dataset configuration for license plate detection
+# Update paths to match your local dataset location
+
+path: ./data                # root dataset directory
+train: images/train         # training images (relative to 'path')
+val: images/val             # validation images (relative to 'path')
+test: images/test           # test images (optional, relative to 'path')
+
+# Classes
+nc: 1                       # number of classes
+names:
+  - license_plate           # class names
+
+# Download script (optional) - replace with your dataset source
+# download: https://example.com/license-plate-dataset.zip
