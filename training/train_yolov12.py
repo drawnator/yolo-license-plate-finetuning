@@ -16,14 +16,14 @@ from ultralytics import YOLO
 
 
 def train(
-    data: str = "data.yaml",
+    data: str = r"datasets\brazil_yolo12\data.yaml",
     model: str = "yolov12s.pt",
     img_size: int = 640,
     batch_size: int = 16,
     epochs: int = 100,
-    device: str = "0",
+    device: str = "cpu",
     project: str = "runs/train",
-    name: str = "yolov12_license_plate",
+    name: str = "2yolov12_license_plate",
     patience: int = 20,
     workers: int = 8,
 ):
