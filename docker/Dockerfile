@@ -41,3 +41,6 @@ COPY . .
 
 # ── Default command ────────────────────────────────────────────────────────────
 CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO GPU environment ready.')"]
+CMD ["python", "prep_dataset.py"]
+CMD ["python", "training/train_yolo26.py"]
+
