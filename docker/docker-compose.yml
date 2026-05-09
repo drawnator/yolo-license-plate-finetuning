@@ -11,7 +11,7 @@ x-common-env: &common-env
 # Volume mounts
 # ──────────────────────────────────────────────────────────────────────────────
 x-volumes: &volumes
-  - ./data:/app/data          # dataset directory
+  - ./datasets:/app/datasets          # dataset directory
   - ./runs:/app/runs          # training & prediction outputs
   - ./configs:/app/configs    # config files
 

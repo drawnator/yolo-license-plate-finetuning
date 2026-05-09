@@ -1,0 +1,33 @@
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Common environment variables shared by all services
+# ──────────────────────────────────────────────────────────────────────────────
+x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Volume mounts
+# ──────────────────────────────────────────────────────────────────────────────
+x-volumes: &volumes
+  - ./datasets:/app/datasets          # dataset directory
+
+services:
+  # ── GPU training service ────────────────────────────────────────────────────
+  train-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: yolo_train_gpu
+    environment:
+      <<: *common-env
+    volumes: *volumes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: python training/train_yolo26.py
+    # Override with: docker compose run train-gpu python training/train_yolov5.py
