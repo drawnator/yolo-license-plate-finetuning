@@ -17,12 +17,12 @@ from ultralytics import YOLO
 
 def train(
     data: str = r"datasets\brazil_yolo12\data.yaml",
-    # data: str = r"datasets\UFPR-ALPR\data.yaml",
+    # data: str = r"datasets\UFPR-ALPR dataset\data.yaml",
     model: str = "	yolo26n.pt",
-    img_size: int = 640,
+    # img_size: int = 1920,
     batch_size: int = 16,
     epochs: int = 100,
-    device: str = "gpu",
+    device: str = "cpu",
     project: str = "runs/train",
     name: str = "yolov26_license_plate",
     patience: int = 20,
@@ -53,7 +53,7 @@ def train(
     print("loaded model")
     results = yolo.train(
         data=data,
-        imgsz=img_size,
+        # imgsz=img_size,
         batch=batch_size,
         epochs=epochs,
         device=device,
