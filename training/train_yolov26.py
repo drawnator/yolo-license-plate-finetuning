@@ -22,7 +22,7 @@ def train(
     # img_size: int = 1920,
     batch_size: int = 16,
     epochs: int = 100,
-    device: str = "gpu",
+    device: str = "0",
     project: str = "runs/train",
     name: str = "yolov26_license_plate",
     patience: int = 20,
