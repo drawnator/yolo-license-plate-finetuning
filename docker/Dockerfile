@@ -3,7 +3,7 @@
 # Base image: CUDA 12.1 + cuDNN 8 + Ubuntu 22.04
 # Adjust the CUDA version tag to match your host driver.
 
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:13.0-cudnn8-runtime-ubuntu22.04
 
 LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (GPU)"
@@ -41,6 +41,7 @@ COPY . .
 
 # ── Default command ────────────────────────────────────────────────────────────
 CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO GPU environment ready.')"]
+CMD ["nvidia-smi"]
 CMD ["python", "prep_dataset.py"]
 
 
