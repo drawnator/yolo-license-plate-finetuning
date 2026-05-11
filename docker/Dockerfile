@@ -3,7 +3,7 @@
 # Base image: CUDA 12.1 + cuDNN 8 + Ubuntu 22.04
 # Adjust the CUDA version tag to match your host driver.
 
-FROM nvidia/cuda:13.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:13.0.3-cudnn-runtime-ubuntu22.04
 
 LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (GPU)"
