@@ -29,5 +29,5 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    command: python training/train_yolo26.py
+    command: python training/train_yolov26.py
     # Override with: docker compose run train-gpu python training/train_yolov5.py

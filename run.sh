@@ -1,1 +1,1 @@
-docker compose -f docker\\docker-compose-train.yml up
+docker compose -f docker\\docker-compose-train.yml up --build
