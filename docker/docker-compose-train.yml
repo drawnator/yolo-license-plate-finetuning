@@ -22,7 +22,7 @@ services:
     environment:
       <<: *common-env
     volumes: *volumes
-    image: nvidia/cuda:13.0.3-cudnn-runtime-ubuntu22.04
+    image: nvidia/cuda:13.0.3-cudnn-runtime-ubi8
     deploy:
       resources:
         reservations:

@@ -14,8 +14,8 @@ import requests
 import zipfile
 
 dataset_url = "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/dataset/Brazil.Plates.Detector.v2i.yolo26.zip"
-dataset_zip_path = "app/datasets/brazil_yolo12.zip"
-dataset_extract_path = "app/datasets/brazil_yolo12"
+dataset_zip_path = "datasets/brazil_yolo12.zip"
+dataset_extract_path = "datasets/brazil_yolo12"
 
 #curl -L "https://universe.roboflow.com/ds/FfrIWBIMBq?key=7CTRoFmULV" > roboflow.zip; unzip roboflow.zip; rm roboflow.zip
 if not os.path.exists(dataset_zip_path):
