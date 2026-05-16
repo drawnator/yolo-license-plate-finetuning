@@ -9,8 +9,8 @@ x-common-env: &common-env
 # ──────────────────────────────────────────────────────────────────────────────
 # Volume mounts
 # ──────────────────────────────────────────────────────────────────────────────
-x-volumes: &volumes
-  - ./datasets:/app/datasets          # dataset directory
+# x-volumes: &volumes
+  # - ./datasets:/datasets          # dataset directory
 
 services:
   # ── GPU training service ────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ services:
     container_name: yolo_train_gpu
     environment:
       <<: *common-env
-    volumes: *volumes
+    # volumes: *volumes
     image: nvidia/cuda:13.0.3-cudnn-runtime-ubi8
     deploy:
       resources:
