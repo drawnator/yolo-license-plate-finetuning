@@ -16,7 +16,7 @@ from ultralytics import YOLO
 
 
 def train(
-    data: str = r"datasets\brazil_yolo12\data.yaml",
+    data: str = r"./datasets/brazil_yolo12/data.yaml",
     # data: str = r"datasets\UFPR-ALPR dataset\data.yaml",
     model: str = "	yolo26n.pt",
     # img_size: int = 1920,
