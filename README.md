@@ -384,7 +384,7 @@ This project is released under the [MIT License](LICENSE).
 docker commit {id} temp_debug_image
 docker run -it --entrypoint /bin/sh temp_debug_image
 docker image rm temp_debug_image:latest 
-ocker container prune
+docker container prune
 
 # getting files from container
 docker cp temp_debug_image:/data.log ./data.log

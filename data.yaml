@@ -3,14 +3,14 @@
 
 path: ./datasets
 train: 
- - ..brazil_yolo12/train/images
- - ..face_yolo12/train/images
+ - brazil_yolo12/train/images
+ - face_yolo12/train/images
 val: 
- - ..brazil_yolo12/valid/images
- - ..face_yolo12/valid/images
+ - brazil_yolo12/valid/images
+ - face_yolo12/valid/images
 test: 
- - ..brazil_yolo12/test/images
- - ..face_yolo12/test/images
+ - brazil_yolo12/test/images
+ - face_yolo12/test/images
 
 nc: 2
 names: ['plate', 'face']
