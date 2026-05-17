@@ -379,3 +379,14 @@ This project is released under the [MIT License](LICENSE).
 
 - [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
 - [YOLOv5](https://github.com/ultralytics/yolov5)
+
+# debugging a training
+docker commit {id} temp_debug_image
+docker run -it --entrypoint /bin/sh temp_debug_image
+docker image rm temp_debug_image:latest 
+ocker container prune
+
+# getting files from container
+docker cp temp_debug_image:/data.log ./data.log
+
+# datasets
