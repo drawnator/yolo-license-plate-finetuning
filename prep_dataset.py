@@ -13,7 +13,7 @@ import os
 import requests
 import zipfile
 
-dataset_url = "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/plate_dataset/Brazil.Plates.Detector.v2i.yolo26.zip
+dataset_url = "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/plate_dataset/Brazil.Plates.Detector.v2i.yolo26.zip"
 dataset_zip_path = "datasets/brazil_yolo12.zip"
 dataset_extract_path = "datasets/brazil_yolo12"
 
