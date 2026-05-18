@@ -36,7 +36,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 # ── Copy project files ─────────────────────────────────────────────────────────
 COPY . .
-RUN if [! -L /datasets ]; then mkdir datasets; fi
+RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
 RUN python3 -c "import torch; print(torch.cuda.is_available())"
 RUN python prep_dataset.py
 # ── Default command ────────────────────────────────────────────────────────────
