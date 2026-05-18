@@ -1,1 +1,2 @@
-docker compose -f docker/docker-compose-train.yml up --build
+docker compose -f docker/docker-compose-train.yml up --build --force-recreate
+
