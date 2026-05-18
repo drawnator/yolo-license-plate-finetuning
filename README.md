@@ -381,12 +381,13 @@ This project is released under the [MIT License](LICENSE).
 - [YOLOv5](https://github.com/ultralytics/yolov5)
 
 # debugging a training
+docker container ls -a
 docker commit {id} temp_debug_image
 docker run -it --entrypoint /bin/sh temp_debug_image
 docker image rm temp_debug_image:latest 
 docker container prune
 
 # getting files from container
-docker cp temp_debug_image:/data.log ./data.log
+docker cp temp_debug_image:/runs/detect/runs/train/yolov26_license_plate/weights/best.pt ./best
 
 # datasets

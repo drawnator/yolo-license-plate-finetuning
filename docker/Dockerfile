@@ -31,8 +31,6 @@ RUN if [ ! -L /usr/bin/python ]; then ln -s /usr/bin/python3.11 /usr/bin/python;
 # ── Python dependencies ────────────────────────────────────────────────────────
 
 COPY requirements.txt ./
-RUN pip uninstall -y opencv-python && \
-    pip install opencv-python-headless
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 

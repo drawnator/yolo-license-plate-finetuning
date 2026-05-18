@@ -1,14 +1,15 @@
 # Core ML / YOLO
+coremltools>=9.0
 ultralytics>=8.3.0
 torch>=2.0.0
 torchvision>=0.15.0
 
 # Computer vision utilities
-opencv-python>=4.8.0
+opencv-python-headless
 Pillow>=10.0.0
 
 # Data / numerical
-numpy>=1.24.0
+numpy==2.3.5
 pandas>=2.0.0
 
 # Visualisation
