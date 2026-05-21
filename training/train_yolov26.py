@@ -65,7 +65,6 @@ def train(
         # License-plate-specific settings
         close_mosaic=10,
         degrees=5.0,
-        perspective=0.001,
         fliplr=0.5,
         mosaic=1.0,
         multi_scale=0.25,
