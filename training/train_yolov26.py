@@ -18,7 +18,7 @@ from ultralytics import YOLO
 def train(
     data: str = r"./data.yaml",
     # data: str = r"datasets\UFPR-ALPR dataset\data.yaml",
-    model: str = "	yolo26s.pt",
+    model: str = "	yolo26m.pt",
     # img_size: int = 1920,
     batch_size: int = 16,
     epochs: int = 200,
@@ -69,9 +69,10 @@ def train(
         mosaic=1.0,
         multi_scale=0.25,
         shear = 45,
-        perspective=0.0005,
-        bgr = 0.25,
+        perspective=0.001,
+        # bgr = 0.25,
         cutmix  = 0.1,
+        mixup = 0.1
     )
 
     print(f"\nTraining complete. Results saved to: {results.save_dir}")

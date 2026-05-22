@@ -388,7 +388,7 @@ docker image rm temp_debug_image:latest
 docker container prune
 
 # getting files from container
-docker cp trusting_hypatia:/runs/detect/runs/train/yolov26_license_plate/weights/best.pt ./best
+docker cp trusting_hypatia:/runs/detect/runs/train/yolov26_license_plate/weights/best.pt ./best.pt
 
 # datasets
 docker system prune -a
