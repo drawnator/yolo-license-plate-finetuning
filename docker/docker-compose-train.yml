@@ -23,7 +23,7 @@ services:
       <<: *common-env
     # volumes: *volumes
     image: nvidia/cuda:13.0.3-cudnn-runtime-ubi8
-    shm_size: '2gb'
+    shm_size: '8gb'
     deploy:
       resources:
         reservations:
