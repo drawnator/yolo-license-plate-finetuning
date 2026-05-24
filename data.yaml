@@ -5,12 +5,14 @@ path: ./datasets
 train: 
  - brazil_yolo12/train/images
  - face_yolo12/train/images
+ - UFPR/train
 val: 
  - brazil_yolo12/valid/images
  - face_yolo12/valid/images
+ - UFPR/train
 test: 
  - brazil_yolo12/test/images
  - face_yolo12/test/images
-
-nc: 2
-names: ['plate', 'face']
+ - UFPR/train
+nc: 4
+names: ['plate', 'face','car','motorcycle']
