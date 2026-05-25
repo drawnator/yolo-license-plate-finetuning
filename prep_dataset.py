@@ -22,7 +22,7 @@ face_dataset_zip_path = "datasets/face_yolo12.zip"
 face_dataset_extract_path = "datasets/face_yolo12"
 
 ALPR_dataset_url = "https://www.inf.ufpr.br/vri/databases/yj4Iu2-UFPR-ALPR.zip"
-ALPR_dataset_zip_path = "datasets/ALPR.zip"
+ALPR_dataset_zip_path = "datasets/yj4Iu2-UFPR-ALPR.zip"
 ALPR_dataset_extract_path = "datasets/"
 
 #curl -L "https://universe.roboflow.com/ds/FfrIWBIMBq?key=7CTRoFmULV" > roboflow.zip; unzip roboflow.zip; rm roboflow.zip
