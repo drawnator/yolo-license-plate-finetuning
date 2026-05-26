@@ -18,7 +18,7 @@ from ultralytics import YOLO
 def train(
     data: str = r"./data.yaml",
     # data: str = r"datasets\UFPR-ALPR dataset\data.yaml",
-    model: str = "	yolo26s.pt",
+    model: str = "yolo26s.pt",
     # img_size: int = 1920,
     batch_size: int = 16,
     epochs: int = 100,

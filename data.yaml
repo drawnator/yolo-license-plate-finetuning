@@ -2,17 +2,17 @@
 # Update paths to match your local dataset location
 
 path: ./datasets
-train: 
+train:
  - brazil_yolo12/train/images
  - face_yolo12/train/images
- - UFPR/image/training
-val: 
- - brazil_yolo12/validation/images
+ - UFPR-ALPR/images/training
+val:
+ - brazil_yolo12/valid/images
  - face_yolo12/valid/images
- - UFPR/image/validation
-test: 
+ - UFPR-ALPR/images/validation
+test:
  - brazil_yolo12/test/images
  - face_yolo12/test/images
- - UFPR/image/testing
+ - UFPR-ALPR/images/testing
 nc: 4
 names: ['plate', 'face','car','motorcycle']

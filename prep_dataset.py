@@ -99,7 +99,7 @@ for root, dirs, files in os.walk(original_path):
             # print(new_path)
         else:
             path = os.path.join(root, file)
-            new_path = Path(path.replace(original_path,folder_path).replace("ALPR","ALPR/image"))
+            new_path = Path(path.replace(original_path,folder_path).replace("ALPR","ALPR/images"))
             new_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(path), str(new_path))
         
