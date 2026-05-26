@@ -24,24 +24,45 @@ face_dataset_extract_path = "datasets/face_yolo12"
 ALPR_dataset_url = "https://www.inf.ufpr.br/vri/databases/yj4Iu2-UFPR-ALPR.zip"
 ALPR_dataset_zip_path = "datasets/yj4Iu2-UFPR-ALPR.zip"
 ALPR_dataset_extract_path = "datasets/"
+# The ALPR zip extracts into this folder; used to detect if it's already prepared.
+ALPR_dataset_final_path = "datasets/UFPR-ALPR dataset"
 
-#curl -L "https://universe.roboflow.com/ds/FfrIWBIMBq?key=7CTRoFmULV" > roboflow.zip; unzip roboflow.zip; rm roboflow.zip
-if not os.path.exists(dataset_zip_path):
-    subprocess.run(["curl","-L",dataset_url,"-o",dataset_zip_path])
-if not os.path.exists(dataset_extract_path):
-    subprocess.run(['unzip', dataset_zip_path,"-d", dataset_extract_path])
-    subprocess.run(['rm', dataset_zip_path])
+os.makedirs("datasets", exist_ok=True)
 
-if not os.path.exists(face_dataset_zip_path):
-    subprocess.run(["curl","-L",face_dataset_url,"-o",face_dataset_zip_path])
-if not os.path.exists(face_dataset_extract_path):
-    subprocess.run(['unzip', face_dataset_zip_path,"-d", face_dataset_extract_path])
-    subprocess.run(['rm', face_dataset_zip_path])
 
-if not os.path.exists(ALPR_dataset_zip_path):
-    subprocess.run(["curl","-L",ALPR_dataset_url,"-o",ALPR_dataset_zip_path])
-subprocess.run(['unzip', ALPR_dataset_zip_path,"-d", ALPR_dataset_extract_path])
-subprocess.run(['rm', ALPR_dataset_zip_path])
+def prepare_dataset(url, zip_path, extract_path, final_path=None):
+    """Download and extract a dataset, skipping work that's already done.
+
+    - If `final_path` (or `extract_path` when no `final_path` is given) already
+      exists, do nothing.
+    - If the zip is already present, skip the download and just extract.
+    - Otherwise download then extract. The zip is removed only after a
+      successful extraction.
+    """
+    presence_path = final_path or extract_path
+    if os.path.exists(presence_path) and os.path.isdir(presence_path) and os.listdir(presence_path):
+        print(f"[skip] {presence_path} already exists")
+        return
+
+    if not os.path.exists(zip_path):
+        print(f"[download] {url} -> {zip_path}")
+        subprocess.run(["curl", "-L", url, "-o", zip_path], check=True)
+    else:
+        print(f"[skip download] {zip_path} already exists")
+
+    print(f"[extract] {zip_path} -> {extract_path}")
+    subprocess.run(["unzip", "-q", zip_path, "-d", extract_path], check=True)
+    subprocess.run(["rm", zip_path], check=True)
+
+
+prepare_dataset(dataset_url, dataset_zip_path, dataset_extract_path)
+prepare_dataset(face_dataset_url, face_dataset_zip_path, face_dataset_extract_path)
+prepare_dataset(
+    ALPR_dataset_url,
+    ALPR_dataset_zip_path,
+    ALPR_dataset_extract_path,
+    final_path=ALPR_dataset_final_path,
+)
 
 from pathlib import Path
 import shutil
