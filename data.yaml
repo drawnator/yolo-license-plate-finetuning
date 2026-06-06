@@ -6,13 +6,16 @@ train:
  - brazil_yolo12/train/images
  - face_yolo12/train/images
  - UFPR-ALPR/images/training
+ - RodoSol-ALPR/images/training
 val:
  - brazil_yolo12/valid/images
  - face_yolo12/valid/images
  - UFPR-ALPR/images/validation
+ - RodoSol-ALPR/images/validation
 test:
  - brazil_yolo12/test/images
  - face_yolo12/test/images
  - UFPR-ALPR/images/testing
+ - RodoSol-ALPR/images/testing
 nc: 4
 names: ['plate', 'face','car','motorcycle']

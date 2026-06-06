@@ -27,6 +27,10 @@ ALPR_dataset_extract_path = "datasets/"
 # The ALPR zip extracts into this folder; used to detect if it's already prepared.
 ALPR_dataset_final_path = "datasets/UFPR-ALPR dataset"
 
+RODOSOL_dataset_url = "https://copyparty.guilherme.zip/share/tbFcZE-RodoSol-ALPR?zip"
+RODOSOL_dataset_zip_path = "datasets/tbFcZE-RodoSol-ALPR.zip"
+RODOSOL_dataset_extract_path = "datasets/"
+RODOSOL_dataset_final_path = "datasets/RodoSol-ALPR"
 os.makedirs("datasets", exist_ok=True)
 
 
@@ -63,10 +67,19 @@ prepare_dataset(
     ALPR_dataset_extract_path,
     final_path=ALPR_dataset_final_path,
 )
+prepare_dataset(
+    RODOSOL_dataset_url,
+    RODOSOL_dataset_zip_path,
+    RODOSOL_dataset_extract_path,
+    final_path=RODOSOL_dataset_final_path,
+)
 
 from pathlib import Path
 import shutil
 import os
+
+## converts UFPR ALPR dataset to yolov5 format
+
 dimensions = [1_920,1_080]
 original_path = "./datasets/UFPR-ALPR dataset"
 folder_path = './datasets/UFPR-ALPR'
@@ -123,4 +136,127 @@ for root, dirs, files in os.walk(original_path):
             new_path = Path(path.replace(original_path,folder_path).replace("ALPR","ALPR/images"))
             new_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(path), str(new_path))
-        
+
+## converts RODOSOL dataset to yolo format
+#
+# RodoSol-ALPR annotation files have this shape:
+#   type: car            (or motorcycle)
+#   plate: ODE2510
+#   layout: Brazilian    (or Mercosur)
+#   corners: x1,y1 x2,y2 x3,y3 x4,y4
+#
+# Images are 1280x720. The dataset only provides plate corners (no vehicle
+# bounding box), so we emit a single YOLO label per image: the plate (class 0).
+# split.txt assigns each image to training / validation / testing.
+
+rodosol_dimensions = [1_280, 720]
+rodosol_original_path = "./datasets/tbFcZE-RodoSol-ALPR"
+rodosol_folder_path = "./datasets/RodoSol-ALPR"
+
+
+def _parse_rodosol_label(lines):
+    """Parse a RodoSol annotation file's lines into (vehicle_type, corners)."""
+    vehicle_type = ""
+    corners = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip().lower()
+        value = value.strip()
+        if key == "type":
+            vehicle_type = value.lower()
+        elif key == "corners":
+            corners = [list(map(int, p.split(","))) for p in value.split()]
+    return vehicle_type, corners
+
+
+def _corners_to_yolo_bbox(corners, dims):
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+    w = (x_max - x_min) / dims[0]
+    h = (y_max - y_min) / dims[1]
+    cx = (x_min + x_max) / 2 / dims[0]
+    cy = (y_min + y_max) / 2 / dims[1]
+    return [cx, cy, w, h]
+
+
+_RODOSOL_SPLIT_MAP = {
+    "training": "training",
+    "train": "training",
+    "validation": "validation",
+    "valid": "validation",
+    "val": "validation",
+    "testing": "testing",
+    "test": "testing",
+}
+
+
+def convert_rodosol():
+    split_file = os.path.join(rodosol_original_path, "split.txt")
+    if not os.path.exists(split_file):
+        print(f"[skip rodosol] {split_file} not found")
+        return
+
+    images_root = Path(rodosol_folder_path) / "images"
+    labels_root = Path(rodosol_folder_path) / "labels"
+    if images_root.exists() and any(images_root.rglob("*.jpg")):
+        print(f"[skip rodosol] {rodosol_folder_path} already prepared")
+        return
+
+    with open(split_file) as f:
+        entries = [line.strip() for line in f if line.strip()]
+
+    converted = 0
+    skipped = 0
+    for entry in entries:
+        rel_image, _, split_name = entry.partition(";")
+        split_name = _RODOSOL_SPLIT_MAP.get(split_name.strip().lower())
+        if not split_name:
+            skipped += 1
+            continue
+
+        # rel_image looks like "./images/cars-br/img_000003.jpg"
+        rel_image = rel_image.lstrip("./")
+        src_image = Path(rodosol_original_path) / rel_image
+        src_label = src_image.with_suffix(".txt")
+        if not src_image.exists() or not src_label.exists():
+            skipped += 1
+            continue
+
+        # Preserve the subgroup folder (cars-br, cars-me, ...) under the split.
+        subgroup = src_image.parent.name
+        image_name = src_image.name
+        label_name = src_label.with_suffix(".txt").name
+
+        dst_image = images_root / split_name / subgroup / image_name
+        dst_label = labels_root / split_name / subgroup / label_name
+        dst_image.parent.mkdir(parents=True, exist_ok=True)
+        dst_label.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(src_label) as fh:
+            vehicle_type, corners = _parse_rodosol_label(fh.readlines())
+        if len(corners) != 4:
+            skipped += 1
+            continue
+
+        plate_bbox = _corners_to_yolo_bbox(corners, rodosol_dimensions)
+
+        # Class 0 = plate. Vehicle bbox is not provided by RodoSol so we only
+        # emit the plate label. Vehicle type is preserved in a comment for
+        # debugging / future use.
+        with open(dst_label, "w") as fh:
+            fh.write(
+                f"0 {plate_bbox[0]} {plate_bbox[1]} {plate_bbox[2]} {plate_bbox[3]}\n"
+            )
+
+        shutil.copy2(str(src_image), str(dst_image))
+        converted += 1
+
+    print(f"[rodosol] converted={converted} skipped={skipped}")
+
+
+convert_rodosol()
