@@ -13,15 +13,15 @@ import os
 import requests
 import zipfile
 
-dataset_url = "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/plate_dataset/Brazil.Plates.Detector.v2i.yolo26.zip"
+dataset_url = "https://copyparty.guilherme.zip/share/Brazil.Plates.Detector.v2i.yolo26?zip"
 dataset_zip_path = "datasets/brazil_yolo12.zip"
 dataset_extract_path = "datasets/brazil_yolo12"
 
-face_dataset_url = "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/face_dataset/FACE.DETECTION.FYP.v1i.yolov12.zip"
+face_dataset_url = "https://copyparty.guilherme.zip/share/FACE.DETECTION.FYP.v1i.yolov12?zip"
 face_dataset_zip_path = "datasets/face_yolo12.zip"
 face_dataset_extract_path = "datasets/face_yolo12"
 
-ALPR_dataset_url = "https://www.inf.ufpr.br/vri/databases/yj4Iu2-UFPR-ALPR.zip"
+ALPR_dataset_url = "https://copyparty.guilherme.zip/share/yj4Iu2-UFPR-ALPR?zip"
 ALPR_dataset_zip_path = "datasets/yj4Iu2-UFPR-ALPR.zip"
 ALPR_dataset_extract_path = "datasets/"
 # The ALPR zip extracts into this folder; used to detect if it's already prepared.
