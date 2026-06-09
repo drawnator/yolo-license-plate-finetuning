@@ -26,7 +26,7 @@ face_dataset_extract_path = "datasets/face_yolo12"
 
 ALPR_dataset_url = "https://copyparty.guilherme.zip/share/UFPR-ALPR%20dataset?zip"
 ALPR_dataset_zip_path = "datasets/UFPR-ALPR-dataset.zip"
-ALPR_dataset_extract_path = "datasets/UFPR-ALPR dataset"
+ALPR_dataset_extract_path = "datasets/UFPR-ALPR"
 
 RODOSOL_dataset_url = "https://copyparty.guilherme.zip/share/RodoSol-ALPR?zip"
 RODOSOL_dataset_zip_path = "datasets/RodoSol-ALPR.zip"
