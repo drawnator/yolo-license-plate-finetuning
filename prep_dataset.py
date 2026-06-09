@@ -13,6 +13,9 @@ import os
 import requests
 import zipfile
 
+# copyparty ?zip downloads: the zip contains the folder's contents directly
+# (no wrapping top-level directory), so we extract into the final target folder.
+
 dataset_url = "https://copyparty.guilherme.zip/share/Brazil.Plates.Detector.v2i.yolo26?zip"
 dataset_zip_path = "datasets/brazil_yolo12.zip"
 dataset_extract_path = "datasets/brazil_yolo12"
@@ -21,31 +24,26 @@ face_dataset_url = "https://copyparty.guilherme.zip/share/FACE.DETECTION.FYP.v1i
 face_dataset_zip_path = "datasets/face_yolo12.zip"
 face_dataset_extract_path = "datasets/face_yolo12"
 
-ALPR_dataset_url = "https://copyparty.guilherme.zip/share/yj4Iu2-UFPR-ALPR?zip"
-ALPR_dataset_zip_path = "datasets/yj4Iu2-UFPR-ALPR.zip"
-ALPR_dataset_extract_path = "datasets/"
-# The ALPR zip extracts into this folder; used to detect if it's already prepared.
-ALPR_dataset_final_path = "datasets/UFPR-ALPR dataset"
+ALPR_dataset_url = "https://copyparty.guilherme.zip/share/UFPR-ALPR%20dataset?zip"
+ALPR_dataset_zip_path = "datasets/UFPR-ALPR-dataset.zip"
+ALPR_dataset_extract_path = "datasets/UFPR-ALPR dataset"
 
-RODOSOL_dataset_url = "https://copyparty.guilherme.zip/share/tbFcZE-RodoSol-ALPR?zip"
-RODOSOL_dataset_zip_path = "datasets/tbFcZE-RodoSol-ALPR.zip"
-RODOSOL_dataset_extract_path = "datasets/"
-RODOSOL_dataset_final_path = "datasets/RodoSol-ALPR"
+RODOSOL_dataset_url = "https://copyparty.guilherme.zip/share/RodoSol-ALPR?zip"
+RODOSOL_dataset_zip_path = "datasets/RodoSol-ALPR.zip"
+RODOSOL_dataset_extract_path = "datasets/RodoSol-ALPR"
 os.makedirs("datasets", exist_ok=True)
 
 
-def prepare_dataset(url, zip_path, extract_path, final_path=None):
+def prepare_dataset(url, zip_path, extract_path):
     """Download and extract a dataset, skipping work that's already done.
 
-    - If `final_path` (or `extract_path` when no `final_path` is given) already
-      exists, do nothing.
+    - If `extract_path` already exists and is non-empty, do nothing.
     - If the zip is already present, skip the download and just extract.
     - Otherwise download then extract. The zip is removed only after a
       successful extraction.
     """
-    presence_path = final_path or extract_path
-    if os.path.exists(presence_path) and os.path.isdir(presence_path) and os.listdir(presence_path):
-        print(f"[skip] {presence_path} already exists")
+    if os.path.exists(extract_path) and os.path.isdir(extract_path) and os.listdir(extract_path):
+        print(f"[skip] {extract_path} already exists")
         return
 
     if not os.path.exists(zip_path):
@@ -54,6 +52,7 @@ def prepare_dataset(url, zip_path, extract_path, final_path=None):
     else:
         print(f"[skip download] {zip_path} already exists")
 
+    os.makedirs(extract_path, exist_ok=True)
     print(f"[extract] {zip_path} -> {extract_path}")
     subprocess.run(["unzip", "-q", zip_path, "-d", extract_path], check=True)
     subprocess.run(["rm", zip_path], check=True)
@@ -61,18 +60,8 @@ def prepare_dataset(url, zip_path, extract_path, final_path=None):
 
 prepare_dataset(dataset_url, dataset_zip_path, dataset_extract_path)
 prepare_dataset(face_dataset_url, face_dataset_zip_path, face_dataset_extract_path)
-prepare_dataset(
-    ALPR_dataset_url,
-    ALPR_dataset_zip_path,
-    ALPR_dataset_extract_path,
-    final_path=ALPR_dataset_final_path,
-)
-prepare_dataset(
-    RODOSOL_dataset_url,
-    RODOSOL_dataset_zip_path,
-    RODOSOL_dataset_extract_path,
-    final_path=RODOSOL_dataset_final_path,
-)
+prepare_dataset(ALPR_dataset_url, ALPR_dataset_zip_path, ALPR_dataset_extract_path)
+prepare_dataset(RODOSOL_dataset_url, RODOSOL_dataset_zip_path, RODOSOL_dataset_extract_path)
 
 from pathlib import Path
 import shutil
@@ -150,7 +139,7 @@ for root, dirs, files in os.walk(original_path):
 # split.txt assigns each image to training / validation / testing.
 
 rodosol_dimensions = [1_280, 720]
-rodosol_original_path = "./datasets/tbFcZE-RodoSol-ALPR"
+rodosol_original_path = "./datasets/RodoSol-ALPR"
 rodosol_folder_path = "./datasets/RodoSol-ALPR"
 
 
@@ -203,7 +192,10 @@ def convert_rodosol():
 
     images_root = Path(rodosol_folder_path) / "images"
     labels_root = Path(rodosol_folder_path) / "labels"
-    if images_root.exists() and any(images_root.rglob("*.jpg")):
+    # Skip if the split-based structure already exists (training/ subfolder).
+    # The raw extracted images live under images/cars-br/ etc. so we can't just
+    # check for *.jpg existence — we need the reorganized layout.
+    if labels_root.exists() and any(labels_root.rglob("*.txt")):
         print(f"[skip rodosol] {rodosol_folder_path} already prepared")
         return
 
