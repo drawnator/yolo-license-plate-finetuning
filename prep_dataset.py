@@ -18,13 +18,13 @@ import zipfile
 
 dataset_url = "https://copyparty.guilherme.zip/share/Brazil.Plates.Detector.v2i.yolo26?zip"
 dataset_zip_path = "datasets/brazil_yolo12.zip"
-dataset_extract_path = "datasets/brazil_yolo12"
+dataset_extract_path = "datasets/Brazil.Plates.Detector.v2i.yolo26"
 
 face_dataset_url = "https://copyparty.guilherme.zip/share/FACE.DETECTION.FYP.v1i.yolov12?zip"
 face_dataset_zip_path = "datasets/face_yolo12.zip"
-face_dataset_extract_path = "datasets/face_yolo12"
+face_dataset_extract_path = "datasets/FACE.DETECTION.FYP.v1i.yolov12"
 
-ALPR_dataset_url = "https://copyparty.guilherme.zip/share/UFPR-ALPR%20dataset?zip"
+ALPR_dataset_url = "https://copyparty.guilherme.zip/share/UFPR-ALPR?zip"
 ALPR_dataset_zip_path = "datasets/UFPR-ALPR-dataset.zip"
 ALPR_dataset_extract_path = "datasets/UFPR-ALPR"
 
@@ -52,10 +52,9 @@ def prepare_dataset(url, zip_path, extract_path):
     else:
         print(f"[skip download] {zip_path} already exists")
 
-    os.makedirs(extract_path, exist_ok=True)
     print(f"[extract] {zip_path} -> {extract_path}")
-    subprocess.run(["unzip", "-q", zip_path, "-d", extract_path], check=True)
-    subprocess.run(["rm", zip_path], check=True)
+    subprocess.run(["unzip", "-q", zip_path, "-d", "datasets"], check=True)
+    # subprocess.run(["rm", zip_path], check=True)
 
 
 prepare_dataset(dataset_url, dataset_zip_path, dataset_extract_path)
@@ -68,9 +67,8 @@ import shutil
 import os
 
 ## converts UFPR ALPR dataset to yolov5 format
-
 dimensions = [1_920,1_080]
-original_path = "./datasets/UFPR-ALPR dataset"
+original_path = "./datasets/UFPR-ALPR"
 folder_path = './datasets/UFPR-ALPR'
 
 def get_data(lines):
@@ -245,7 +243,7 @@ def convert_rodosol():
                 f"0 {plate_bbox[0]} {plate_bbox[1]} {plate_bbox[2]} {plate_bbox[3]}\n"
             )
 
-        shutil.copy2(str(src_image), str(dst_image))
+        shutil.move(str(src_image), str(dst_image))
         converted += 1
 
     print(f"[rodosol] converted={converted} skipped={skipped}")
