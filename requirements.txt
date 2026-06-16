@@ -17,7 +17,7 @@ matplotlib>=3.7.0
 
 # Experiment tracking (optional)
 # wandb>=0.16.0
-# mlflow>=2.9.0
+mlflow>=2.9.0
 
 # Misc
 PyYAML>=6.0

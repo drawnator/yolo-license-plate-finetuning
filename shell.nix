@@ -10,6 +10,8 @@ pkgs.mkShell {
       pip
       jupyter
       notebook
+      ultralytics
+      pyyaml
     ]))
   ];
 }

@@ -1,0 +1,33 @@
+plate:
+  dataset_url:
+  - "https://copyparty.guilherme.zip/share/Brazil.Plates.Detector.v2i.yolo26?zip"
+  - "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/plate_dataset/Brazil.Plates.Detector.v2i.yolo26.zip"
+  dataset_zip_path: "datasets/brazil_yolo12.zip"
+  dataset_extract_path: "datasets/Brazil.Plates.Detector.v2i.yolo26"
+  expected_structure: ["train", "valid", "test"]
+
+face:
+  dataset_url:
+  - "https://copyparty.guilherme.zip/share/FACE.DETECTION.FYP.v1i.yolov12?zip"
+  - "https://github.com/drawnator/yolo-license-plate-finetuning/releases/download/face_dataset/FACE.DETECTION.FYP.v1i.yolov12.zip"
+  dataset_zip_path: "datasets/face_yolo12.zip"
+  dataset_extract_path: "datasets/FACE.DETECTION.FYP.v1i.yolov12"
+  expected_structure: ["train", "valid", "test"]
+
+ALPR:
+  dataset_url:
+  - "https://copyparty.guilherme.zip/share/UFPR-ALPR?zip"
+  - "https://www.inf.ufpr.br/vri/databases/yj4Iu2-UFPR-ALPR.zip"
+  dataset_zip_path: "datasets/UFPR-ALPR-dataset.zip"
+  dataset_extract_path: "datasets/UFPR-ALPR"
+  converter: "ufpr_alpr"
+  expected_structure: ["images", "labels"]
+
+RODOSOL:
+  dataset_url:
+  - "https://copyparty.guilherme.zip/share/RodoSol-ALPR?zip"
+  - "https://www.inf.ufpr.br/vri/databases/tbFcZE-RodoSol-ALPR.zip"
+  dataset_zip_path: "datasets/RodoSol-ALPR.zip"
+  dataset_extract_path: "datasets/RodoSol-ALPR"
+  converter: "rodosol"
+  expected_structure: ["images", "labels"]

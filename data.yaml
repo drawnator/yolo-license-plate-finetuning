@@ -3,18 +3,18 @@
 
 path: ./datasets
 train:
- - brazil_yolo12/train/images
- - face_yolo12/train/images
+ - Brazil.Plates.Detector.v2i.yolo26/train/images
+ - FACE.DETECTION.FYP.v1i.yolov12/train/images
  - UFPR-ALPR/images/training
  - RodoSol-ALPR/images/training
 val:
- - brazil_yolo12/valid/images
- - face_yolo12/valid/images
+ - Brazil.Plates.Detector.v2i.yolo26/valid/images
+ - FACE.DETECTION.FYP.v1i.yolov12/valid/images
  - UFPR-ALPR/images/validation
  - RodoSol-ALPR/images/validation
 test:
- - brazil_yolo12/test/images
- - face_yolo12/test/images
+ - Brazil.Plates.Detector.v2i.yolo26/test/images
+ - FACE.DETECTION.FYP.v1i.yolov12/test/images
  - UFPR-ALPR/images/testing
  - RodoSol-ALPR/images/testing
 nc: 4

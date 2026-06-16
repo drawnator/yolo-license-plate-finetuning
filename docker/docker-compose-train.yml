@@ -5,6 +5,7 @@
 x-common-env: &common-env
   PYTHONUNBUFFERED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
+  MLFLOW_TRACKING_URI: "https://mlflow.guilherme.zip"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Volume mounts
