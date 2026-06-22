@@ -3,7 +3,11 @@
 import os
 from pathlib import Path
 
-import mlflow
+try:
+    import mlflow
+except ImportError:
+    mlflow = None
+
 from ultralytics import YOLO
 
 # --- Configuration ---
@@ -20,6 +24,10 @@ def export_and_log(model_path: str = MODEL_PATH):
     print(f"Exported to: {exported_path}")
 
     # Log to MLflow as an artifact
+    if mlflow is None:
+        print("[mlflow] not installed, skipping artifact logging")
+        return
+
     mlflow.set_experiment(EXPERIMENT_NAME)
     with mlflow.start_run(run_name=f"export-{exported_path.stem}"):
         mlflow.log_param("source_model", model_path)
