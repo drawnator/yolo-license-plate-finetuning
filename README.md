@@ -114,6 +114,16 @@ pip install -r requirements.txt
 
 Follow the [Dataset Preparation](#dataset-preparation) section below.
 
+### 2.5. authenticate
+Add the mlflow server as local variables
+
+```bash
+export MLFLOW_TRACKING_USERNAME={user}
+export MLFLOW_TRACKING_PASSWORD={password}
+```
+
+Or add them to .envrc if using nixos
+
 ### 3. Train a model
 
 ```bash
@@ -147,6 +157,8 @@ python evaluation/evaluate.py \
 python inference/predict_image.py \
   --weights runs/train/yolov8_license_plate/weights/best.pt \
   --source  path/to/image.jpg
+  --conf 0.5
+  --device gpu
 ```
 
 ---
@@ -356,6 +368,7 @@ docker compose -f docker/docker-compose.yml run train-gpu \
 
 ---
 
+TODO not implemented augmentation hardcoded
 ## Augmentation Configuration
 
 Edit `configs/augmentation.yaml` to tune augmentation parameters for your
@@ -368,6 +381,32 @@ dataset. Key settings for license plates:
 | `fliplr`      | Horizontal flip probability              | `0.5`       |
 | `mosaic`      | Mosaic augmentation probability          | `1.0`       |
 | `blur`        | Gaussian blur (simulates motion/focus)   | `0.01`      |
+
+---
+
+## Semi-Supervised Pseudo-Labeling
+
+The `pseudo_labeling/` package completes missing object-class labels across datasets by
+training class-specialized teacher models on the data that *has* a class and using them to
+label the datasets that are *missing* it, without ever modifying the original labels.
+
+For unattended runs (e.g. inside the Docker training container) a single command
+self-supervises and then trains, with no manual input:
+
+```bash
+# generate a reusable label set (+ archive), then train on it
+python -m pseudo_labeling pipeline --output-target label-set --package
+```
+
+Other entry points:
+
+```bash
+python -m pseudo_labeling run   --output-target label-set   # pseudo-label only
+python -m pseudo_labeling select --use-label-set <id>       # emit a data.yaml for a saved label set
+```
+
+Automated tests and iterative self-training are not included yet; see
+[`pseudo_labeling/DEFERRED_WORK.md`](pseudo_labeling/DEFERRED_WORK.md) for how to add them.
 
 ---
 
