@@ -58,7 +58,7 @@ def train(
     batch_size: int = 16,
     epochs: int = 100,
     device: str = "0",
-    project: str = "runs/train",
+    project: str = "angelicam",
     name: str = "yolov26_license_plate",
     patience: int = 20,
     workers: int = 8,

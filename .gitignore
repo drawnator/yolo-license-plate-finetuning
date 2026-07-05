@@ -38,6 +38,12 @@ datasets/
 data/images/
 data/labels/
 
+# Testing artifacts
+.hypothesis/
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Logs
 *.log
 logs/
@@ -62,3 +68,5 @@ tmp/
 temp/
 *.tmp
 data/*
+
+.kiro/

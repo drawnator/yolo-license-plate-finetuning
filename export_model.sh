@@ -1,0 +1,1 @@
+docker cp yolo_train_gpu:/runs/detect/runs/train/yolov26_license_plate/weights/best.pt ./best.pt
