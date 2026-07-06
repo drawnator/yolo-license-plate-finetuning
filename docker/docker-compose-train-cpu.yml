@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Common environment variables shared by all services
+# ──────────────────────────────────────────────────────────────────────────────
+x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  MLFLOW_TRACKING_URI: "https://mlflow.guilherme.zip"
+  MLFLOW_TRACKING_USERNAME: "${MLFLOW_TRACKING_USERNAME:-admin}"
+  MLFLOW_TRACKING_PASSWORD: "${MLFLOW_TRACKING_PASSWORD}"
+
+services:
+  # ── CPU training service ────────────────────────────────────────────────────
+  train-cpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    container_name: yolo_train_cpu
+    environment:
+      <<: *common-env
+    shm_size: '8gb'
+    # Unattended self-supervision -> training. Generates (or reuses) a self-supervised
+    # label set, trains on it, then submits the trained model and the zipped label set to
+    # MLflow. Add --regenerate to force fresh pseudo-labels.
+    command: python -m pseudo_labeling pipeline
+    # Plain training (no self-supervision): docker compose run train-cpu python training/train_yolov26.py

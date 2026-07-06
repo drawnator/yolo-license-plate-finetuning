@@ -1,6 +1,10 @@
-# YOLO License Plate Fine-tuning – CPU-only Dockerfile
-# =====================================================
-# Use when no GPU is available (training will be much slower).
+# YOLO License Plate Fine-tuning – CPU Dockerfile
+# ================================================
+# CPU-only variant for machines without NVIDIA GPUs.
+# Base image: Python 3.11 on Debian slim
+#
+# Usage:
+#   docker compose -f docker/docker-compose-train-cpu.yml up --build --force-recreate
 
 FROM python:3.11-slim
 
@@ -8,28 +12,37 @@ LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (CPU)"
 
 # ── System packages ────────────────────────────────────────────────────────────
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        wget \
-        curl \
-        libgl1 \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        unzip \
+        libgl1-mesa-glx \
         libglib2.0-0 \
-        libsm6 \
+        libxrender1 \
         libxext6 \
-        libxrender-dev \
-        ffmpeg \
+        libsm6 \
+        libx11-6 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python dependencies ────────────────────────────────────────────────────────
-WORKDIR /app
+# Install PyTorch CPU-only first (from the official CPU index),
+# then install the rest of requirements (ultralytics pulls torch
+# from pypi which includes CUDA — we pre-install CPU-only to prevent that).
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip \
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 # ── Copy project files ─────────────────────────────────────────────────────────
 COPY . .
+RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
+
+# Verify the environment is sane
+RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} — CPU environment ready.')"
+
+# NOTE: dataset preparation (python prep_dataset.py) is NOT run during the
+# build because the dataset may not be present.  Mount /datasets at runtime
+# or run prep_dataset.py manually inside the container.
 
 # ── Default command ────────────────────────────────────────────────────────────
 CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO CPU environment ready.')"]
