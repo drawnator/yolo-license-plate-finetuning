@@ -42,10 +42,7 @@ RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
 
 # Verify the environment is sane
 RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} — CPU environment ready.')"
-
-# NOTE: dataset preparation (python prep_dataset.py) is NOT run during the
-# build because the dataset may not be present.  Mount /datasets at runtime
-# or run prep_dataset.py manually inside the container.
+RUN python prep_dataset.py
 
 # ── Default command ────────────────────────────────────────────────────────────
 CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO CPU environment ready.')"]
