@@ -19,6 +19,8 @@ services:
     container_name: yolo_train_cpu
     environment:
       <<: *common-env
+    volumes:
+      - ./datasets:/datasets          # persist datasets on host across rebuilds
     shm_size: '8gb'
     # Unattended self-supervision -> training. Generates (or reuses) a self-supervised
     # label set, trains on it, then submits the trained model and the zipped label set to

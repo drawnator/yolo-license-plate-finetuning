@@ -31,7 +31,7 @@ def run_pipeline(
         A summary dict: {"succeeded": [...], "failed": [...], "skipped": [...]}
     """
     _setup_logging()
-
+    logger.info("[pipeline] starting...")
     datasets = load_config(config_path)
 
     if dataset_names:

@@ -42,7 +42,11 @@ RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
 
 # Verify the environment is sane
 RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} — CPU environment ready.')"
-RUN python prep_dataset.py
 
-# ── Default command ────────────────────────────────────────────────────────────
-CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO CPU environment ready.')"]
+# ── Entrypoint: prepare datasets then run the pipeline ─────────────────────────
+# Datasets are mounted from the host via docker-compose volume (./datasets:/datasets).
+# prep_dataset.py is idempotent — it skips already-downloaded/extracted datasets.
+COPY docker/entrypoint-cpu.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "-m", "pseudo_labeling", "pipeline"]
