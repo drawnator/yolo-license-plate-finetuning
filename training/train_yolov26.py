@@ -153,42 +153,76 @@ def train(
 
     logger.info(f"Training complete. Results saved to: {results.save_dir}")
 
-    # --- Export best model to CoreML and log to MLflow (optional) ---
-    best_weights = Path(results.save_dir) / "weights" / "best.pt"
-    if best_weights.exists():
-        _export_and_log(best_weights)
-    else:
-        logger.warning("best.pt not found after training; skipping export")
-
     return results
 
 
-def _export_and_log(weights_path: Path):
-    """Export best weights to .mlpackage and log the artifact to MLflow (if available)."""
-    logger.info(f"Exporting {weights_path.name} to CoreML...")
+def best_weights_of(results) -> Path:
+    """Return the path to ``best.pt`` for a completed training run."""
+    return Path(results.save_dir) / "weights" / "best.pt"
+
+
+def export_model(weights_path: Path, fmt: str = "coreml") -> Path | None:
+    """Export best weights to ``fmt`` (default CoreML .mlpackage). Returns the export path.
+
+    Returns ``None`` (and logs) on failure so callers can continue.
+    """
+    logger.info("Exporting %s to %s...", Path(weights_path).name, fmt)
     try:
         model = YOLO(str(weights_path))
-        exported_path = Path(model.export(format="coreml", nms=True))
-        logger.info(f"Exported to: {exported_path}")
-    except Exception as e:
-        logger.error("Export to CoreML failed: %s", e)
-        return
+        exported_path = Path(model.export(format=fmt, nms=True))
+        logger.info("Exported to: %s", exported_path)
+        return exported_path
+    except Exception as e:  # noqa: BLE001 - export is best-effort
+        logger.error("Export to %s failed: %s", fmt, e)
+        return None
 
+
+def log_model_to_mlflow(
+    weights_path: Path,
+    exported_path: Path | None = None,
+    *,
+    run_name: str | None = None,
+    experiment: str = "yolo-license-plate",
+    params: dict | None = None,
+    artifacts: list | None = None,
+) -> None:
+    """Log the trained model to MLflow using model logging (if MLflow is available).
+
+    Uses ``mlflow.pytorch.log_model`` on the underlying YOLO module (falling back to logging
+    the raw weights as an artifact if model logging is unavailable). Any ``exported_path``
+    (e.g. the CoreML package) and extra ``artifacts`` (e.g. a zipped self-supervised label
+    set) are attached to the same run.
+    """
     if mlflow is None:
-        logger.warning("mlflow not installed, skipping artifact logging")
+        logger.warning("mlflow not installed, skipping model logging")
         return
 
     try:
-        mlflow.set_experiment("yolo-license-plate-export")
-        with mlflow.start_run(run_name=f"export-{exported_path.stem}"):
+        import mlflow.pytorch
+
+        yolo = YOLO(str(weights_path))
+        mlflow.set_experiment(experiment)
+        with mlflow.start_run(run_name=run_name or f"train-{Path(weights_path).stem}"):
             mlflow.log_param("source_weights", str(weights_path))
-            mlflow.log_param("export_format", "coreml")
-            mlflow.log_param("nms", True)
-            mlflow.log_artifact(str(exported_path))
-            logger.info(f"Logged {exported_path.name} to MLflow")
-    except Exception as e:
-        # Export succeeded — don't raise just because logging failed
-        logger.error("MLflow logging failed: %s", e)
+            for key, value in (params or {}).items():
+                mlflow.log_param(key, value)
+
+            try:
+                mlflow.pytorch.log_model(yolo.model, artifact_path="model")
+                logger.info("Logged model to MLflow (pytorch flavor)")
+            except Exception as e:  # noqa: BLE001 - fall back to a plain weights artifact
+                logger.error("log_model failed (%s); logging raw weights instead", e)
+                mlflow.log_artifact(str(weights_path), artifact_path="model")
+
+            if exported_path is not None and Path(exported_path).exists():
+                mlflow.log_artifact(str(exported_path), artifact_path="coreml")
+
+            for art in artifacts or []:
+                if art and Path(art).exists():
+                    mlflow.log_artifact(str(art))
+                    logger.info("Logged artifact to MLflow: %s", art)
+    except Exception as e:  # noqa: BLE001 - logging must never fail the run
+        logger.error("MLflow model logging failed: %s", e)
 
 
 if __name__ == "__main__":
@@ -198,4 +232,13 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S",
     )
     _check_environment()
-    train()
+    results = train()
+
+    # Export + log the trained model to MLflow (kept out of train() so training and
+    # export/logging can be composed independently, e.g. by the pseudo-labeling pipeline).
+    best_weights = best_weights_of(results)
+    if best_weights.exists():
+        exported = export_model(best_weights)
+        log_model_to_mlflow(best_weights, exported)
+    else:
+        logger.warning("best.pt not found after training; skipping export")
