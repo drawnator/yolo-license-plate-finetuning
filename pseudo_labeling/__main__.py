@@ -193,7 +193,6 @@ def _cmd_pipeline(args: argparse.Namespace) -> int:
         log_model_to_mlflow(
             best,
             exported,
-            run_name=f"pipeline-{label_set_id}",
             params={"label_set_id": label_set_id, "data": train_data},
             artifacts=[archive] if archive else None,
         )

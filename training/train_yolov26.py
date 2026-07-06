@@ -181,17 +181,20 @@ def log_model_to_mlflow(
     weights_path: Path,
     exported_path: Path | None = None,
     *,
-    run_name: str | None = None,
-    experiment: str = "yolo-license-plate",
     params: dict | None = None,
     artifacts: list | None = None,
 ) -> None:
-    """Log the trained model to MLflow using model logging (if MLflow is available).
+    """Add proper model logging to the MLflow run Ultralytics already created.
 
-    Uses ``mlflow.pytorch.log_model`` on the underlying YOLO module (falling back to logging
-    the raw weights as an artifact if model logging is unavailable). Any ``exported_path``
-    (e.g. the CoreML package) and extra ``artifacts`` (e.g. a zipped self-supervised label
-    set) are attached to the same run.
+    Ultralytics' ``yolo.train`` auto-logs params/metrics to MLflow when the tracking env
+    vars are set (as in docker-compose) and ends the run when training finishes. Rather than
+    open a competing run, this **resumes that same run** (via ``mlflow.last_active_run``) and
+    only increments it with the trained model, the CoreML export, and any extra ``artifacts``
+    (e.g. a zipped self-supervised label set). If no prior run is found it falls back to a
+    new run so standalone use still logs something.
+
+    Uses ``mlflow.pytorch.log_model`` on the underlying YOLO module, falling back to logging
+    the raw ``best.pt`` as an artifact if model logging is unavailable.
     """
     if mlflow is None:
         logger.warning("mlflow not installed, skipping model logging")
@@ -200,10 +203,12 @@ def log_model_to_mlflow(
     try:
         import mlflow.pytorch
 
+        # Resume the run Ultralytics created during training (keep its auto-logged data).
+        last = mlflow.last_active_run()
+        run_id = last.info.run_id if last is not None else None
+
         yolo = YOLO(str(weights_path))
-        mlflow.set_experiment(experiment)
-        with mlflow.start_run(run_name=run_name or f"train-{Path(weights_path).stem}"):
-            mlflow.log_param("source_weights", str(weights_path))
+        with mlflow.start_run(run_id=run_id):
             for key, value in (params or {}).items():
                 mlflow.log_param(key, value)
 
