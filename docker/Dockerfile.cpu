@@ -12,10 +12,12 @@ LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (CPU)"
 
 # ── System packages ────────────────────────────────────────────────────────────
+# libgl1-mesa-glx → libgl1 (package was removed in newer Debian; libgl1 provides
+# the same OpenGL ABI). The other packages are direct dependencies of OpenCV.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         unzip \
-        libgl1-mesa-glx \
+        libgl1 \
         libglib2.0-0 \
         libxrender1 \
         libxext6 \
