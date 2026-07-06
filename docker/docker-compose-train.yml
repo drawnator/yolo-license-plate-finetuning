@@ -34,5 +34,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    command: python training/train_yolov26.py
-    # Override with: docker compose run train-gpu python training/train_yolov5.py
+    # Unattended self-supervision -> training. Generates (or reuses) a self-supervised
+    # label set, trains on it, then submits the trained model and the zipped label set to
+    # MLflow. Add --regenerate to force fresh pseudo-labels.
+    command: python -m pseudo_labeling pipeline
+    # Plain training (no self-supervision): docker compose run train-gpu python training/train_yolov26.py

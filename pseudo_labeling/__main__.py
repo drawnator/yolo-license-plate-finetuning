@@ -18,6 +18,7 @@ which pseudo-labels every dataset, saves a reusable label set + archive, then tr
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 import yaml
@@ -29,8 +30,11 @@ from .config import (
     ThresholdConfig,
 )
 from .dataset_config import ORIGINAL_LABELS, LabelSetSelector
-from .labelset import LabelSetStore
+from .labelset import LabelSetNotFound, LabelSetStore, make_label_set_id, package_label_set
 from .system import PseudoLabelingSystem
+
+#: Default label-set name used by the unattended pipeline so it is reusable across runs.
+DEFAULT_PIPELINE_LABEL_SET = "self_supervised"
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +122,12 @@ def _cmd_select(args: argparse.Namespace) -> int:
 
 
 def _cmd_pipeline(args: argparse.Namespace) -> int:
-    """Unattended self-supervise -> train (Docker one-shot)."""
+    """Unattended self-supervise -> train (Docker one-shot).
+
+    Reuses an existing self-supervised label set if one is already present (skipping
+    regeneration), trains on it, then submits the trained model and the zipped label set to
+    MLflow.
+    """
     # Default the self-supervision step to unattended, non-destructive, reusable output.
     if getattr(args, "merge_mode", None) is None:
         args.merge_mode = "auto"
@@ -126,35 +135,83 @@ def _cmd_pipeline(args: argparse.Namespace) -> int:
         args.output_target = "label-set"
     if getattr(args, "non_interactive", None) is None:
         args.non_interactive = True
+    if getattr(args, "label_set_name", None) is None and getattr(args, "label_set_id", None) is None:
+        args.label_set_name = DEFAULT_PIPELINE_LABEL_SET
 
     cfg = _load_config(args)
-    system = PseudoLabelingSystem(backend=_make_backend(args))
-    outcome = system.run(cfg)
-    _print_outcome(outcome)
-    if outcome.manifest.status != "success":
-        print("pseudo-labeling failed; aborting training", file=sys.stderr)
-        return 1
+    store = LabelSetStore(root=cfg.label_set_store_root)
+    label_set_id = cfg.label_set_id or make_label_set_id("", cfg.label_set_name)
 
-    # Resolve the data.yaml to train on: the produced label set if any, else the original.
+    # Reuse an existing self-supervised label set if present (unless --regenerate).
+    reuse = False
+    if not getattr(args, "regenerate", False):
+        try:
+            store.load(label_set_id)
+            reuse = True
+        except LabelSetNotFound:
+            reuse = False
+
+    if reuse:
+        print(f"reusing existing self-supervised label set: {label_set_id}")
+    else:
+        system = PseudoLabelingSystem(backend=_make_backend(args))
+        outcome = system.run(cfg)
+        _print_outcome(outcome)
+        if outcome.manifest.status != "success":
+            print("pseudo-labeling failed; aborting training", file=sys.stderr)
+            return 1
+        label_set_id = outcome.manifest.label_set_id or label_set_id
+
+    # Resolve the data.yaml to train on: the label set if available, else the original.
     train_data = cfg.data_yaml
-    if outcome.manifest.label_set_id:
-        store = LabelSetStore(root=cfg.label_set_store_root)
+    try:
         selector = LabelSetSelector(store=store, source_data_yaml=cfg.data_yaml)
-        dscfg = selector.select(
-            outcome.manifest.label_set_id,
-            output_root=f"runs/pseudo_labeling/{outcome.manifest.run_id}/train_data",
-        )
+        dscfg = selector.select(label_set_id, output_root="runs/pseudo_labeling/train_data")
         train_data = dscfg.yaml_path
         print(f"training will use label-set data.yaml: {train_data}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not select label set ({exc}); training on original data.yaml", file=sys.stderr)
 
     if args.no_train:
         print("`--no-train` set; skipping training step")
         return 0
 
-    from training.train_yolov26 import train as _train
+    from training.train_yolov26 import (
+        best_weights_of,
+        export_model,
+        log_model_to_mlflow,
+        train as _train,
+    )
 
-    _train(data=train_data, model=cfg.base_model or "yolo26s.pt")
+    results = _train(data=train_data, model=cfg.base_model or "yolo26s.pt")
+
+    # Export the model and submit it + the zipped label set to MLflow.
+    best = best_weights_of(results)
+    exported = export_model(best) if best.exists() else None
+    archive = _package_label_set_for_mlflow(store, label_set_id)
+    if best.exists():
+        log_model_to_mlflow(
+            best,
+            exported,
+            run_name=f"pipeline-{label_set_id}",
+            params={"label_set_id": label_set_id, "data": train_data},
+            artifacts=[archive] if archive else None,
+        )
     return 0
+
+
+def _package_label_set_for_mlflow(store: LabelSetStore, label_set_id: str) -> str | None:
+    """Zip the label set for MLflow submission; returns the archive path or None."""
+    try:
+        label_set = store.load(label_set_id)
+    except LabelSetNotFound:
+        return None
+    archive_path = os.path.join(store.root, f"{label_set_id}.tar.gz")
+    try:
+        return package_label_set(label_set, archive_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not package label set for MLflow: {exc}", file=sys.stderr)
+        return None
 
 
 def _make_backend(args: argparse.Namespace):
@@ -222,6 +279,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_flags(p_pipe)
     p_pipe.add_argument("--no-train", dest="no_train", action="store_true",
                         help="run pseudo-labeling + label-set selection but skip training")
+    p_pipe.add_argument("--regenerate", dest="regenerate", action="store_true",
+                        help="regenerate the label set even if one already exists")
     p_pipe.set_defaults(func=_cmd_pipeline)
 
     return parser
