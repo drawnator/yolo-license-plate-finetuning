@@ -38,8 +38,13 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY . .
 RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
 RUN python3 -c "import torch; print(torch.cuda.is_available())"
-RUN python prep_dataset.py
-# ── Default command ────────────────────────────────────────────────────────────
-CMD ["python", "-c", "from ultralytics import YOLO; print('YOLO GPU environment ready.')"]
+
+# ── Entrypoint: prepare datasets then run the pipeline ─────────────────────────
+# Datasets are mounted from the host via docker-compose volume (./datasets:/datasets).
+# prep_dataset.py is idempotent — it skips already-downloaded/extracted datasets.
+COPY docker/entrypoint-gpu.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "-m", "pseudo_labeling", "pipeline"]
 
 

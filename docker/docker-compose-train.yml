@@ -24,7 +24,8 @@ services:
     container_name: yolo_train_gpu
     environment:
       <<: *common-env
-    # volumes: *volumes
+    volumes:
+      - ./datasets:/datasets          # persist datasets on host across rebuilds
     image: nvidia/cuda:13.0.3-cudnn-runtime-ubi8
     shm_size: '8gb'
     deploy:

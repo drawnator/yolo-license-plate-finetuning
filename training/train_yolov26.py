@@ -23,10 +23,20 @@ try:
 except ImportError:
     mlflow = None
 
+import albumentations as A
+
 from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
-
+# https://docs.ultralytics.com/guides/yolo-data-augmentation#custom-albumentations-transforms-augmentations
+custom_transforms = [
+    A.Blur(blur_limit=7, p=0.5),
+    A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+    A.CLAHE(clip_limit=4.0, p=0.5),
+    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+    
+]
 
 def _check_environment():
     """Validate environment before starting training."""
@@ -123,6 +133,7 @@ def train(
     yolo = YOLO(model)
 
     try:
+        #https://docs.ultralytics.com/modes/train#train-settings
         results = yolo.train(
             data=str(data_path),
             batch=batch_size,
@@ -132,17 +143,25 @@ def train(
             name=name,
             patience=patience,
             workers=workers,
+            verbose=False,
             exist_ok=True,
+            cache=True,
+            cls_pow=0.3,
             # License‑plate‑specific augmentation
+            hsv_h=0.5,
             close_mosaic=10,
-            degrees=5.0,
+            degrees=90.0,
             fliplr=0.5,
+            flipud=0.01,
             mosaic=1.0,
             multi_scale=0.25,
             shear=45,
             perspective=0.001,
             cutmix=0.1,
             mixup=0.1,
+            augmentations=custom_transforms,
+            copypaste=0.2,
+
         )
     except KeyboardInterrupt:
         logger.info("\nTraining interrupted by user. Partial checkpoint may be in: %s", project_path)
