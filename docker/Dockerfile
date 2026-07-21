@@ -15,6 +15,9 @@ RUN yum update -y && \
     unzip \
     python3.11 \
     python3.11-pip \
+    gcc \
+    gcc-c++ \
+    make \
     libxcb \
     libxcb-devel \
     libXrender \
