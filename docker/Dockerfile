@@ -46,7 +46,7 @@ RUN python3 -c "import torch; print(torch.cuda.is_available())"
 # Datasets are mounted from the host via docker-compose volume (./datasets:/datasets).
 # prep_dataset.py is idempotent — it skips already-downloaded/extracted datasets.
 COPY docker/entrypoint-gpu.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "-m", "pseudo_labeling", "pipeline"]
 
