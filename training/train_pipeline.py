@@ -81,11 +81,25 @@ def stage_generate_synthetic(
     image_count: int,
     output_dir: str = SYNTHETIC_DATASET_DIR,
     seed: int = 42,
+    force: bool = False,
 ) -> str:
     """Generate synthetic plates dataset using existing dataset images as backgrounds.
 
+    Idempotent: skips generation if ``output_dir`` already contains a valid
+    YOLO dataset structure (train/val/test with images and a data.yaml).
+    Use ``force=True`` to always regenerate.
+
     Returns the path to the generated ``data.yaml``.
     """
+    expected_yaml = os.path.join(output_dir, "data.yaml")
+    if not force and _synthetic_dataset_valid(output_dir):
+        logger.info(
+            "Synthetic dataset already exists at %s — skipping generation. "
+            "Use --regenerate-synthetic to force recreation.",
+            output_dir,
+        )
+        return expected_yaml
+
     logger.info("=" * 60)
     logger.info("STAGE 1a: Generating synthetic plates dataset (%d images)", image_count)
     logger.info("=" * 60)
@@ -114,6 +128,19 @@ def stage_generate_synthetic(
     )
     logger.info("Synthetic dataset ready: %s", yaml_path)
     return yaml_path
+
+
+def _synthetic_dataset_valid(output_dir: str) -> bool:
+    """Return True if ``output_dir`` contains a valid-looking YOLO dataset."""
+    data_yaml = os.path.join(output_dir, "data.yaml")
+    if not os.path.isfile(data_yaml):
+        return False
+    for split in ("train", "val", "test"):
+        img_dir = os.path.join(output_dir, split, "images")
+        lbl_dir = os.path.join(output_dir, split, "labels")
+        if not os.path.isdir(img_dir) or not os.listdir(img_dir):
+            return False
+    return True
 
 
 def _collect_backgrounds(datasets_root: str) -> str:
@@ -224,6 +251,7 @@ def stage_pseudo_label(
     data_yaml: str,
     teacher_weights: str | None = None,
     base_model: str = "yolo26s.pt",
+    force_regenerate: bool = False,
 ) -> int:
     """Run pseudo-labeling with an optional pretrained teacher model.
 
@@ -243,8 +271,12 @@ def stage_pseudo_label(
         "--non-interactive",
         "--package",
         "--no-train",          # pipeline controls final training separately
-        "--regenerate",        # always regenerate with the new teacher model
     ]
+    if force_regenerate:
+        args.append("--regenerate")
+    else:
+        logger.info("Pseudo-labeling will reuse existing label set if available. "
+                     "Use --regenerate-pseudo to force regeneration.")
 
     if teacher_weights and os.path.isfile(teacher_weights):
         args.extend(["--base-model", teacher_weights])
@@ -378,6 +410,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Epochs for final training stage")
     p.add_argument("--batch-size", type=int, default=16,
                    help="Batch size")
+    p.add_argument("--regenerate-synthetic", action="store_true",
+                   help="Force regeneration of the synthetic plates dataset")
+    p.add_argument("--regenerate-pseudo", action="store_true",
+                   help="Force regeneration of pseudo-labels (ignores cached label set)")
 
     # Output
     p.add_argument("--project", default="angelicam",
@@ -400,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
         synthetic_yaml = stage_generate_synthetic(
             image_count=args.synthetic,
             seed=args.synthetic,  # deterministic from count
+            force=args.regenerate_synthetic,
         )
         # Build a combined data.yaml pointing to real + synthetic
         data_yaml = _inject_synthetic_into_data_yaml(args.data, SYNTHETIC_DATASET_DIR)
@@ -430,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
             data_yaml=data_yaml,
             teacher_weights=teacher_weights,
             base_model=args.base_model,
+            force_regenerate=args.regenerate_pseudo,
         )
         if rc != 0:
             logger.error("Pseudo-labeling failed with exit code %d", rc)

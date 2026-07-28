@@ -48,8 +48,21 @@ RUN python3 -c "import torch; print(torch.cuda.is_available())"
 COPY docker/entrypoint-gpu.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-# Three-stage pipeline: generate synthetic plates, pretrain a strong teacher,
-# run pseudo-labeling with that teacher, then train the final model.
-CMD ["python", "training/train_pipeline.py", "--synthetic", "5000", "--pretrain"]
+
+# ── Default CMD flags (see python training/train_pipeline.py --help) ──────────
+#   --synthetic N          Generate N synthetic plate images (0 = skip)
+#   --pretrain             Pretrain a teacher model on real + synthetic data
+#   --regenerate-synthetic Force recreation of the synthetic dataset
+#   --regenerate-pseudo    Force regeneration of pseudo-labels
+#   --skip-pseudo / --skip-final   Skip a stage
+#   --teacher-weights PT   Use a specific .pt file as pseudo-labeling teacher
+#   --base-model MODEL     Base model (default: yolo26s.pt)
+#   --pretrain-epochs N    Epochs for pretraining (default: 50)
+#   --final-epochs N       Epochs for final training (default: 100)
+#   --batch-size N         Batch size (default: 16)
+#   --device DEVICE        CUDA device or 'cpu' (default: 0)
+#   --project DIR          Output directory (default: angelicam)
+#   --name NAME            Training run name
+CMD ["python", "training/train_pipeline.py", "--synthetic", "5000", "--pretrain","--regenerate-synthetic","--regenerate-pseudo"]
 
 
