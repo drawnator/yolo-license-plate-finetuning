@@ -146,7 +146,7 @@ def train(
             verbose=False,
             exist_ok=True,
             cache=True,
-            cls_pow=0.3,
+            cls_pw=0.3,
             # License‑plate‑specific augmentation
             hsv_h=0.5,
             close_mosaic=10,
@@ -160,7 +160,7 @@ def train(
             cutmix=0.1,
             mixup=0.1,
             augmentations=custom_transforms,
-            copypaste=0.2,
+            copy_paste=0.2,
 
         )
     except KeyboardInterrupt:
