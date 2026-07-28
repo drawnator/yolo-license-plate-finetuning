@@ -12,6 +12,8 @@ pkgs.mkShell {
       notebook
       ultralytics
       pyyaml
+      opencv
+      pillow
     ]))
   ];
 }
