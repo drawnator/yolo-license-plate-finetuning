@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # https://docs.ultralytics.com/guides/yolo-data-augmentation#custom-albumentations-transforms-augmentations
 custom_transforms = [
     A.Blur(blur_limit=7, p=0.5),
-    A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+    A.GaussNoise(p=0.3),
     A.CLAHE(clip_limit=4.0, p=0.5),
     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
     A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
