@@ -144,7 +144,7 @@ def train(
             patience=patience,
             workers=workers,
             verbose=False,
-            exist_ok=True,
+            exist_ok=False,
             cache=True,
             cls_pw=0.3,
             # License‑plate‑specific augmentation
