@@ -48,6 +48,8 @@ RUN python3 -c "import torch; print(torch.cuda.is_available())"
 COPY docker/entrypoint-gpu.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "pseudo_labeling", "pipeline"]
+# Three-stage pipeline: generate synthetic plates, pretrain a strong teacher,
+# run pseudo-labeling with that teacher, then train the final model.
+CMD ["python", "training/train_pipeline.py", "--synthetic", "5000", "--pretrain"]
 
 

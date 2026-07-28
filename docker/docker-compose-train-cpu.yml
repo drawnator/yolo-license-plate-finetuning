@@ -22,8 +22,9 @@ services:
     volumes:
       - ./datasets:/datasets          # persist datasets on host across rebuilds
     shm_size: '8gb'
-    # Unattended self-supervision -> training. Generates (or reuses) a self-supervised
-    # label set, trains on it, then submits the trained model and the zipped label set to
-    # MLflow. Add --regenerate to force fresh pseudo-labels.
-    command: python -m pseudo_labeling pipeline
-    # Plain training (no self-supervision): docker compose run train-cpu python training/train_yolov26.py
+    # Three-stage pipeline: synthetic → pretrain strong teacher → pseudo-label → final train.
+    # CPU variant with fewer synthetic images and epochs.
+    # Uses the CMD from Dockerfile. Override with:
+    #   docker compose run train-cpu python training/train_yolov26.py
+    #   docker compose run train-cpu python -m pseudo_labeling pipeline --regenerate
+    #   docker compose run train-cpu python training/train_pipeline.py --synthetic 500 --pretrain --device cpu

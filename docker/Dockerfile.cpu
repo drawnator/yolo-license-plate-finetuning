@@ -50,4 +50,7 @@ RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} — CPU enviro
 COPY docker/entrypoint-cpu.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "pseudo_labeling", "pipeline"]
+# Three-stage pipeline: generate synthetic plates, pretrain a strong teacher,
+# run pseudo-labeling with that teacher, then train the final model.
+# CPU runtime: fewer epochs and smaller synthetic count.
+CMD ["python", "training/train_pipeline.py", "--synthetic", "1000", "--pretrain", "--device", "cpu", "--pretrain-epochs", "25", "--final-epochs", "50"]
