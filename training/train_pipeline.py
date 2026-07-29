@@ -53,9 +53,17 @@ def _inject_synthetic_into_data_yaml(
     synthetic_dir: str,
     output_yaml: str | None = None,
 ) -> str:
-    """Add synthetic dataset paths to a copy of data.yaml and return the new path."""
+    """Add synthetic dataset paths to a copy of data.yaml and return the new path.
+
+    Paths are computed relative to the YAML's ``path`` field (the dataset root),
+    *not* relative to the YAML file's directory. This ensures YOLO resolves
+    entries like ``synthetic_plates/train/images`` correctly against
+    ``path: ./datasets`` → ``./datasets/synthetic_plates/train/images``.
+    """
     with open(source_yaml, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    yaml_root = cfg.get("path", ".")
 
     # Normalize existing entries to lists
     for key in ("train", "val", "test"):
@@ -65,7 +73,8 @@ def _inject_synthetic_into_data_yaml(
         # Add synthetic split if it exists
         synthetic_split = f"{synthetic_dir}/{key}/images"
         if os.path.isdir(synthetic_split):
-            rel = os.path.relpath(synthetic_split, os.path.dirname(source_yaml) or ".")
+            # Compute path relative to the YAML's dataset root (e.g. ./datasets)
+            rel = os.path.relpath(synthetic_split, yaml_root)
             if rel not in val:
                 val.append(rel)
         cfg[key] = val
@@ -428,7 +437,8 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging()
     args = build_parser().parse_args(argv)
 
-    data_yaml = args.data
+    # Keep the original data.yaml path for stages that shouldn't see synthetic data.
+    original_data_yaml = args.data
     teacher_weights = args.teacher_weights
 
     # ── Stage 1: Generate synthetic data + pretrain ──
@@ -438,12 +448,12 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.synthetic,  # deterministic from count
             force=args.regenerate_synthetic,
         )
-        # Build a combined data.yaml pointing to real + synthetic
-        data_yaml = _inject_synthetic_into_data_yaml(args.data, SYNTHETIC_DATASET_DIR)
+        # Build a combined data.yaml (real + synthetic) ONLY for pretraining.
+        combined_yaml = _inject_synthetic_into_data_yaml(args.data, SYNTHETIC_DATASET_DIR)
 
         if args.pretrain:
             teacher_weights = stage_pretrain(
-                data_yaml=data_yaml,
+                data_yaml=combined_yaml,
                 base_model=args.base_model,
                 output_dir=os.path.join(args.project, "pretrain"),
                 epochs=args.pretrain_epochs,
@@ -451,9 +461,9 @@ def main(argv: list[str] | None = None) -> int:
                 device=args.device,
             )
     elif args.pretrain:
-        # Pretrain on real data only (still produces a strong teacher)
+        # Pretrain on real data only (still produces a strong teacher).
         teacher_weights = stage_pretrain(
-            data_yaml=data_yaml,
+            data_yaml=original_data_yaml,
             base_model=args.base_model,
             output_dir=os.path.join(args.project, "pretrain"),
             epochs=args.pretrain_epochs,
@@ -462,9 +472,11 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     # ── Stage 2: Pseudo-labeling ──
+    # ALWAYS use the original data.yaml here — synthetic plates have no faces,
+    # cars or motorcycles, so pseudo-labeling on them is wasteful and noisy.
     if not args.skip_pseudo:
         rc = stage_pseudo_label(
-            data_yaml=data_yaml,
+            data_yaml=original_data_yaml,
             teacher_weights=teacher_weights,
             base_model=args.base_model,
             force_regenerate=args.regenerate_pseudo,
@@ -476,9 +488,10 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("Skipping pseudo-labeling stage")
 
     # ── Stage 3: Final training ──
+    # Resolves the label-set data.yaml (real + pseudo-labels) automatically.
     if not args.skip_final:
         stage_final_train(
-            data_yaml=data_yaml,
+            data_yaml=original_data_yaml,
             base_model=args.base_model,
             epochs=args.final_epochs,
             batch_size=args.batch_size,
