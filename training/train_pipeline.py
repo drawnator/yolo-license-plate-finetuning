@@ -33,6 +33,25 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+
+def _get_git_hash() -> str:
+    """Return the current git commit hash, or 'unknown' if unavailable."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return os.environ.get("GIT_COMMIT_HASH", "unknown")
+
+
 # Default directories
 DEFAULT_DATA_YAML = "./data.yaml"
 DEFAULT_DATASETS_ROOT = "./datasets"
@@ -348,7 +367,11 @@ def stage_final_train(
     best = best_weights_of(results)
     if best.exists():
         exported = export_model(best)
-        log_model_to_mlflow(best, exported)
+        log_model_to_mlflow(
+            best,
+            exported,
+            params={"commit_hash": _get_git_hash(), "stage": "final"},
+        )
 
     return results
 
@@ -436,6 +459,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     _setup_logging()
     args = build_parser().parse_args(argv)
+
+    commit_hash = _get_git_hash()
+    logger.info("Git commit: %s", commit_hash)
 
     # Keep the original data.yaml path for stages that shouldn't see synthetic data.
     original_data_yaml = args.data

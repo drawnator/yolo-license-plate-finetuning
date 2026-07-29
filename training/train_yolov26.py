@@ -15,6 +15,7 @@ Installation:
 import logging
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,6 +38,22 @@ custom_transforms = [
     A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
     
 ]
+
+def _get_git_hash() -> str:
+    """Return the current git commit hash, or 'unknown' if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return os.environ.get("GIT_COMMIT_HASH", "unknown")
+
 
 def _check_environment():
     """Validate environment before starting training."""
@@ -263,6 +280,10 @@ if __name__ == "__main__":
     best_weights = best_weights_of(results)
     if best_weights.exists():
         exported = export_model(best_weights)
-        log_model_to_mlflow(best_weights, exported)
+        log_model_to_mlflow(
+            best_weights,
+            exported,
+            params={"commit_hash": _get_git_hash()},
+        )
     else:
         logger.warning("best.pt not found after training; skipping export")

@@ -7,6 +7,7 @@ x-common-env: &common-env
   MLFLOW_TRACKING_URI: "https://mlflow.guilherme.zip"
   MLFLOW_TRACKING_USERNAME: "${MLFLOW_TRACKING_USERNAME:-admin}"
   MLFLOW_TRACKING_PASSWORD: "${MLFLOW_TRACKING_PASSWORD}"
+  GIT_COMMIT_HASH: "${GIT_COMMIT_HASH:-unknown}"
   # Celeron G3930 lacks AVX/AVX2/FMA/BMI — skip Polars CPU feature check
   POLARS_SKIP_CPU_CHECK: "1"
 
