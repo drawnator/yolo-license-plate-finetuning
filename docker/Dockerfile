@@ -1,6 +1,6 @@
 # YOLO License Plate Fine-tuning – GPU Dockerfile
 # ================================================
-# Base image: CUDA 12.1 + cuDNN 8 + Ubuntu 22.04
+# Base image: CUDA 13.0 + cuDNN + Ubuntu
 # Adjust the CUDA version tag to match your host driver.
 
 FROM nvidia/cuda:13.0.3-cudnn-runtime-ubi8
@@ -9,7 +9,6 @@ LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (GPU)"
 
 # ── System packages ────────────────────────────────────────────────────────────
-# ENV DEBIAN_FRONTEND=noninteractive
 RUN yum update -y && \
     yum install -y \
     unzip \
@@ -49,12 +48,13 @@ COPY docker/entrypoint-gpu.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
-# ── Default CMD flags (see python training/train_pipeline.py --help) ──────────
+# ── Default CMD (see python -m training.train_pipeline --help) ────────────────
 #   --synthetic N          Generate N synthetic plate images (0 = skip)
 #   --pretrain             Pretrain a teacher model on real + synthetic data
 #   --regenerate-synthetic Force recreation of the synthetic dataset
 #   --regenerate-pseudo    Force regeneration of pseudo-labels
 #   --skip-pseudo / --skip-final   Skip a stage
+#   --skip-export          Skip CoreML export (Linux/Docker; export on macOS later)
 #   --teacher-weights PT   Use a specific .pt file as pseudo-labeling teacher
 #   --base-model MODEL     Base model (default: yolo26s.pt)
 #   --pretrain-epochs N    Epochs for pretraining (default: 50)
@@ -63,6 +63,10 @@ ENTRYPOINT ["/entrypoint.sh"]
 #   --device DEVICE        CUDA device or 'cpu' (default: 0)
 #   --project DIR          Output directory (default: angelicam)
 #   --name NAME            Training run name
-CMD ["python", "training/train_pipeline.py", "--synthetic", "5000", "--pretrain","--regenerate-synthetic","--regenerate-pseudo"]
-
-
+#
+# CoreML export is skipped by default (requires macOS). To export later:
+#   python -c "from ultralytics import YOLO; YOLO('best.pt').export(format='coreml', nms=True)"
+#
+# NOTE: Uses "python -m" (not "python training/...") so sys.path includes the
+# project root and can import sibling packages like synthetic_plates.
+CMD ["python", "-m", "training.train_pipeline", "--synthetic", "5000", "--pretrain", "--skip-export","--regenerate-synthetic","--regenerate-pseudo"]

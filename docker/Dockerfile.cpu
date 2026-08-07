@@ -12,8 +12,7 @@ LABEL maintainer="drawnator"
 LABEL description="YOLO license plate fine-tuning environment (CPU)"
 
 # ── System packages ────────────────────────────────────────────────────────────
-# libgl1-mesa-glx → libgl1 (package was removed in newer Debian; libgl1 provides
-# the same OpenGL ABI). The other packages are direct dependencies of OpenCV.
+# libgl1 provides the OpenGL ABI needed by OpenCV.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
@@ -27,10 +26,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python dependencies ────────────────────────────────────────────────────────
-# Install PyTorch CPU-only first (from the official CPU index),
-# then install the rest of requirements (ultralytics pulls torch
-# from pypi which includes CUDA — we pre-install CPU-only to prevent that).
-
+# Install PyTorch CPU-only first to prevent pip from pulling the CUDA variant.
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
@@ -45,18 +41,17 @@ RUN if [ ! -d /datasets ]; then mkdir -p /datasets; fi
 RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} — CPU environment ready.')"
 
 # ── Entrypoint: prepare datasets then run the pipeline ─────────────────────────
-# Datasets are mounted from the host via docker-compose volume (./datasets:/datasets).
-# prep_dataset.py is idempotent — it skips already-downloaded/extracted datasets.
 COPY docker/entrypoint-cpu.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
-# ── Default CMD flags (see python training/train_pipeline.py --help) ──────────
+# ── Default CMD (see python -m training.train_pipeline --help) ────────────────
 #   --synthetic N          Generate N synthetic plate images (0 = skip)
 #   --pretrain             Pretrain a teacher model on real + synthetic data
 #   --regenerate-synthetic Force recreation of the synthetic dataset
 #   --regenerate-pseudo    Force regeneration of pseudo-labels
 #   --skip-pseudo / --skip-final   Skip a stage
+#   --skip-export          Skip CoreML export (Linux/Docker; export on macOS later)
 #   --teacher-weights PT   Use a specific .pt file as pseudo-labeling teacher
 #   --base-model MODEL     Base model (default: yolo26s.pt)
 #   --pretrain-epochs N    Epochs for pretraining (default: 50)
@@ -67,4 +62,8 @@ ENTRYPOINT ["/entrypoint.sh"]
 #   --name NAME            Training run name
 #
 # CPU defaults use fewer images / epochs to finish in reasonable time.
-CMD ["python", "training/train_pipeline.py", "--synthetic", "1000", "--pretrain", "--device", "cpu", "--pretrain-epochs", "25", "--final-epochs", "50"]
+# CoreML export is skipped (requires macOS).
+#
+# NOTE: Uses "python -m" (not "python training/...") so sys.path includes the
+# project root and can import sibling packages like synthetic_plates.
+CMD ["python", "-m", "training.train_pipeline", "--synthetic", "1000", "--pretrain", "--device", "cpu", "--pretrain-epochs", "25", "--final-epochs", "50", "--skip-export"]
