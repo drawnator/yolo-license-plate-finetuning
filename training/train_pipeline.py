@@ -325,6 +325,7 @@ def stage_final_train(
     project: str = "angelicam",
     name: str = "yolov26_license_plate",
     use_pseudo_labels: bool = True,
+    skip_export: bool = False,
 ):
     """Train the final model on real + pseudo-labeled data.
 
@@ -366,7 +367,13 @@ def stage_final_train(
 
     best = best_weights_of(results)
     if best.exists():
-        exported = export_model(best)
+        if skip_export:
+            logger.info("Skipping CoreML export (--skip-export). Export on macOS: "
+                         "python -c \"from ultralytics import YOLO; YOLO('%s').export(format='coreml', nms=True)\"",
+                         best)
+            exported = None
+        else:
+            exported = export_model(best)
         log_model_to_mlflow(
             best,
             exported,
@@ -446,6 +453,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Force regeneration of the synthetic plates dataset")
     p.add_argument("--regenerate-pseudo", action="store_true",
                    help="Force regeneration of pseudo-labels (ignores cached label set)")
+    p.add_argument("--skip-export", action="store_true",
+                   help="Skip CoreML export (use on Linux/Docker; export on macOS later)")
 
     # Output
     p.add_argument("--project", default="angelicam",
@@ -524,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             project=args.project,
             name=args.name,
+            skip_export=args.skip_export,
         )
     else:
         logger.info("Skipping final training stage")
