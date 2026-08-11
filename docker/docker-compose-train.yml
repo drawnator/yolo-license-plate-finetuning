@@ -27,6 +27,9 @@ services:
       <<: *common-env
     volumes:
       - ./datasets:/datasets          # persist datasets on host across rebuilds
+      - ./runs:/runs                  # persist training outputs + pseudo-labels
+      - ./angelicam:/angelicam        # persist final model outputs
+      - ./datasets/label_sets:/datasets/label_sets  # persist label sets
     image: nvidia/cuda:13.0.3-cudnn-runtime-ubi8
     shm_size: '8gb'
     deploy:

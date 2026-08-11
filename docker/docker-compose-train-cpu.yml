@@ -22,6 +22,9 @@ services:
       <<: *common-env
     volumes:
       - ./datasets:/datasets          # persist datasets on host across rebuilds
+      - ./runs:/runs                  # persist training outputs + pseudo-labels
+      - ./angelicam:/angelicam        # persist final model outputs
+      - ./datasets/label_sets:/datasets/label_sets  # persist label sets
     shm_size: '8gb'
     # Three-stage pipeline: synthetic → pretrain strong teacher → pseudo-label → final train.
     # CPU variant with fewer synthetic images and epochs.

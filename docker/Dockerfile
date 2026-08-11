@@ -69,4 +69,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 #
 # NOTE: Uses "python -m" (not "python training/...") so sys.path includes the
 # project root and can import sibling packages like synthetic_plates.
-CMD ["python", "-m", "training.train_pipeline", "--synthetic", "5000", "--pretrain", "--skip-export"]
+CMD ["python", "-m", "training.train_pipeline", "--synthetic", "50000", "--pretrain", "--skip-export","--regenerate-synthetic","--regenerate-pseudo"]

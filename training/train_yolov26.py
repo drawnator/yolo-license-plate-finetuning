@@ -219,6 +219,7 @@ def log_model_to_mlflow(
     *,
     params: dict | None = None,
     artifacts: list | None = None,
+    data_yaml: str | None = None,
 ) -> None:
     """Add proper model logging to the MLflow run Ultralytics already created.
 
@@ -231,6 +232,9 @@ def log_model_to_mlflow(
 
     Uses ``mlflow.pytorch.log_model`` on the underlying YOLO module, falling back to logging
     the raw ``best.pt`` as an artifact if model logging is unavailable.
+
+    If ``data_yaml`` is provided, its contents are logged as ``data_yaml_used.yaml`` so the
+    exact dataset configuration used for training is preserved in the run.
     """
     if mlflow is None:
         logger.warning("mlflow not installed, skipping model logging")
@@ -247,6 +251,11 @@ def log_model_to_mlflow(
         with mlflow.start_run(run_id=run_id):
             for key, value in (params or {}).items():
                 mlflow.log_param(key, value)
+
+            # Log the training data.yaml as a reference artifact
+            if data_yaml and Path(data_yaml).exists():
+                mlflow.log_artifact(data_yaml, artifact_path="config")
+                logger.info("Logged training data.yaml to MLflow: %s", data_yaml)
 
             try:
                 mlflow.pytorch.log_model(yolo.model, artifact_path="model")

@@ -377,6 +377,7 @@ def stage_final_train(
         log_model_to_mlflow(
             best,
             exported,
+            data_yaml=train_data_yaml,
             params={"commit_hash": _get_git_hash(), "stage": "final"},
         )
 
