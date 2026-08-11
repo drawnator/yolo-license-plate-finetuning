@@ -165,9 +165,9 @@ def train(
             cache=True,
             cls_pw=0.3,
             # License‑plate‑specific augmentation
-            hsv_h=0.5,
+            hsv_h=0.3,
             close_mosaic=10,
-            degrees=90.0,
+            degrees=45.0,
             fliplr=0.5,
             flipud=0.01,
             mosaic=1.0,
