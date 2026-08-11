@@ -55,6 +55,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 #   --regenerate-pseudo    Force regeneration of pseudo-labels
 #   --skip-pseudo / --skip-final   Skip a stage
 #   --skip-export          Skip CoreML export (Linux/Docker; export on macOS later)
+#   --mix-synthetic        Mix synthetic plates into the final training dataset
 #   --teacher-weights PT   Use a specific .pt file as pseudo-labeling teacher
 #   --base-model MODEL     Base model (default: yolo26s.pt)
 #   --pretrain-epochs N    Epochs for pretraining (default: 50)
@@ -69,4 +70,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 #
 # NOTE: Uses "python -m" (not "python training/...") so sys.path includes the
 # project root and can import sibling packages like synthetic_plates.
-CMD ["python", "-m", "training.train_pipeline", "--synthetic", "50000", "--pretrain", "--skip-export","--regenerate-synthetic","--regenerate-pseudo"]
+CMD ["python", "-m", "training.train_pipeline", "--synthetic", "50000", "--pretrain", "--skip-export", "--mix-synthetic", "--regenerate-synthetic", "--regenerate-pseudo"]

@@ -12,8 +12,9 @@ pkgs.mkShell {
       notebook
       ultralytics
       pyyaml
-      opencv
+      opencv4
       pillow
+      albumentations
     ]))
   ];
 }

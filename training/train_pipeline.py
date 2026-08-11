@@ -326,6 +326,7 @@ def stage_final_train(
     name: str = "yolov26_license_plate",
     use_pseudo_labels: bool = True,
     skip_export: bool = False,
+    mix_synthetic: bool = False,
 ):
     """Train the final model on real + pseudo-labeled data.
 
@@ -347,6 +348,14 @@ def stage_final_train(
             logger.warning(
                 "Could not resolve label-set data.yaml; falling back to %s", data_yaml
             )
+
+    # Optionally inject synthetic plates into the final training dataset
+    if mix_synthetic and _synthetic_dataset_valid(SYNTHETIC_DATASET_DIR):
+        logger.info("Mixing synthetic plates into final training dataset")
+        train_data_yaml = _inject_synthetic_into_data_yaml(
+            train_data_yaml, SYNTHETIC_DATASET_DIR,
+            output_yaml=train_data_yaml.replace(".yaml", "_with_synthetic.yaml"),
+        )
 
     from training.train_yolov26 import (
         train as _train,
@@ -456,6 +465,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Force regeneration of pseudo-labels (ignores cached label set)")
     p.add_argument("--skip-export", action="store_true",
                    help="Skip CoreML export (use on Linux/Docker; export on macOS later)")
+    p.add_argument("--mix-synthetic", action="store_true",
+                   help="Mix synthetic plate images into the final training dataset")
 
     # Output
     p.add_argument("--project", default="angelicam",
@@ -535,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project,
             name=args.name,
             skip_export=args.skip_export,
+            mix_synthetic=args.mix_synthetic,
         )
     else:
         logger.info("Skipping final training stage")
