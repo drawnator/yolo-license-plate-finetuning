@@ -240,7 +240,7 @@ def _create_solid_backgrounds() -> str:
 
 def stage_pretrain(
     data_yaml: str,
-    base_model: str = "yolo26s.pt",
+    base_model: str = "yolo26l.pt",
     output_dir: str = PRETRAIN_DIR,
     epochs: int = 50,
     batch_size: int = 16,
@@ -278,7 +278,7 @@ def stage_pretrain(
 def stage_pseudo_label(
     data_yaml: str,
     teacher_weights: str | None = None,
-    base_model: str = "yolo26s.pt",
+    base_model: str = "yolo26l.pt",
     force_regenerate: bool = False,
 ) -> int:
     """Run pseudo-labeling with an optional pretrained teacher model.
@@ -443,7 +443,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Skip final training stage")
 
     # Model config
-    p.add_argument("--base-model", default="yolo26s.pt",
+    p.add_argument("--base-model", default="yolo27s.pt",
                    help="Base model for pretraining and/or final training")
     p.add_argument("--teacher-weights",
                    help="Path to pretrained weights for pseudo-labeling teacher")
@@ -501,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.pretrain:
             teacher_weights = stage_pretrain(
                 data_yaml=combined_yaml,
-                base_model=args.base_model,
+                # base_model=args.base_model,
                 output_dir=os.path.join(args.project, "pretrain"),
                 epochs=args.pretrain_epochs,
                 batch_size=args.batch_size,
@@ -511,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         # Pretrain on real data only (still produces a strong teacher).
         teacher_weights = stage_pretrain(
             data_yaml=original_data_yaml,
-            base_model=args.base_model,
+            # base_model=args.base_model,
             output_dir=os.path.join(args.project, "pretrain"),
             epochs=args.pretrain_epochs,
             batch_size=args.batch_size,
@@ -525,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
         rc = stage_pseudo_label(
             data_yaml=original_data_yaml,
             teacher_weights=teacher_weights,
-            base_model=args.base_model,
+            # base_model=args.base_model,
             force_regenerate=args.regenerate_pseudo,
         )
         if rc != 0:
@@ -539,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_final:
         stage_final_train(
             data_yaml=original_data_yaml,
-            base_model=args.base_model,
+            # base_model=args.base_model,
             epochs=args.final_epochs,
             batch_size=args.batch_size,
             device=args.device,

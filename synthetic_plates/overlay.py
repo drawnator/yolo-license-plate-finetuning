@@ -41,7 +41,7 @@ class OverlayParams:
     # (before perspective distortion). Plates on cars are typically
     # 5-15% of the vehicle width; on a full image they may be 2-8%.
     scale_min: float = 0.03
-    scale_max: float = 0.12
+    scale_max: float = 0.33
 
     # Perspective rotation (simulates off-axis camera angles)
     pitch_min: float = -30.0   # tilt up/down
