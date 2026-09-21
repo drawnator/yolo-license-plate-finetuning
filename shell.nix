@@ -14,7 +14,7 @@ pkgs.mkShell {
       pyyaml
       opencv4
       pillow
-      albumentations
+      # albumentations
     ]))
   ];
 }
