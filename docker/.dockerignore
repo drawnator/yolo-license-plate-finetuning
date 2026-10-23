@@ -1,0 +1,50 @@
+# Build outputs
+**/runs/
+**/*.pt
+**/*.pth
+**/*._weights
+
+# Dataset directories (mounted at runtime)
+**/datasets/
+**/data/images/
+**/data/labels/
+
+# Model weights and checkpoints
+**/weights/
+**/checkpoints/
+
+# Synthetic data generation outputs (regenerated in container)
+**/synthetic_plates_output/
+
+# Label sets (generated in container)
+**/label_set_selection/
+
+# Temporary files
+**/tmp/
+**/temp/
+**/*.tmp
+
+# Docker files (not needed inside container)
+**/docker-compose*.yml
+**/.dockerignore
+**/Dockerfile*
+
+# Git
+**/.git/
+**/.gitignore
+
+# Cache directories
+**/__pycache__/
+**/*.pyc
+**/.cache/
+
+# Logs
+**/*.log
+**/logs/
+
+# IDE and editor files
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+**/*~
