@@ -89,6 +89,10 @@ def train(
     name: str = "yolov26_license_plate",
     patience: int = 20,
     workers: int = 8,
+    cache: bool | str = True,
+    imgsz: int = 640,
+    fraction: float = 1.0,
+    resume: bool = False,
 ):
     """
     Fine-tune YOLOv26 on a license plate dataset.
@@ -103,6 +107,12 @@ def train(
         name: Name for this training run.
         patience: Early-stopping patience (epochs without improvement).
         workers: Number of data-loading workers.
+        cache: Image cache mode: True/"ram", "disk", or False (lowest RAM use).
+        imgsz: Training image size.
+        fraction: Fraction of the training set to use (for smoke tests).
+        resume: Continue the newest unfinished run of ``name`` under ``project``
+            from its ``last.pt`` instead of starting over. A run that already
+            finished is reused as-is.
 
     Returns:
         Ultralytics training results.
@@ -145,6 +155,36 @@ def train(
     project_path.mkdir(parents=True, exist_ok=True)
     logger.info(f"Training outputs will be saved to: {project_path}")
 
+    # --- Resume an interrupted run if asked ---
+    resume_from = _find_last_checkpoint(project_path, name) if resume else None
+    if resume_from is not None:
+        import torch
+        from types import SimpleNamespace
+
+        epoch = torch.load(resume_from, map_location="cpu", weights_only=False).get("epoch", -1)
+        if epoch is None or epoch < 0:  # Ultralytics marks finished runs with epoch=-1
+            logger.info("Run %s already finished — reusing it", resume_from.parent.parent)
+            return SimpleNamespace(save_dir=resume_from.parent.parent)
+        logger.info("Resuming from %s (last completed epoch index: %d)", resume_from, epoch)
+        try:
+            # Only memory-related settings may change on resume; the rest comes from the checkpoint.
+            results = YOLO(str(resume_from)).train(
+                resume=True,
+                data=str(data_path),
+                batch=batch_size,
+                workers=workers,
+                cache=cache,
+                imgsz=imgsz,
+                device=device,
+            )
+        except Exception as e:
+            logger.error("Training failed: %s", e)
+            raise
+        logger.info(f"Training complete. Results saved to: {results.save_dir}")
+        return results
+    if resume:
+        logger.info("No checkpoint to resume under %s/%s* — starting fresh", project_path, name)
+
     # --- Start training ---
     logger.info(f"Loading model {model}...")
     yolo = YOLO(model)
@@ -162,7 +202,9 @@ def train(
             workers=workers,
             verbose=False,
             exist_ok=False,
-            cache=True,
+            cache=cache,
+            imgsz=imgsz,
+            fraction=fraction,
             cls_pw=0.3,
             # License‑plate‑specific augmentation
             hsv_h=0.3,
@@ -190,6 +232,12 @@ def train(
     logger.info(f"Training complete. Results saved to: {results.save_dir}")
 
     return results
+
+
+def _find_last_checkpoint(project_path: Path, name: str) -> Path | None:
+    """Return the newest ``last.pt`` among runs ``name``, ``name2``, ... under ``project_path``."""
+    candidates = list(project_path.glob(f"{name}*/weights/last.pt"))
+    return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
 def best_weights_of(results) -> Path:
@@ -241,7 +289,9 @@ def log_model_to_mlflow(
         return
 
     try:
-        import mlflow.pytorch
+        # Alias import: a bare `import mlflow.pytorch` here would make `mlflow` a local
+        # name and break the `mlflow is None` check above with UnboundLocalError.
+        from mlflow import pytorch as mlflow_pytorch
 
         # Resume the run Ultralytics created during training (keep its auto-logged data).
         last = mlflow.last_active_run()
@@ -258,7 +308,7 @@ def log_model_to_mlflow(
                 logger.info("Logged training data.yaml to MLflow: %s", data_yaml)
 
             try:
-                mlflow.pytorch.log_model(yolo.model, artifact_path="model")
+                mlflow_pytorch.log_model(yolo.model, artifact_path="model")
                 logger.info("Logged model to MLflow (pytorch flavor)")
             except Exception as e:  # noqa: BLE001 - fall back to a plain weights artifact
                 logger.error("log_model failed (%s); logging raw weights instead", e)

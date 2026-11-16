@@ -88,11 +88,40 @@ class UltralyticsBackend:
         from training.train_yolov26 import train as _train
 
         name = f"teacher_{os.path.basename(run_dir) or 'run'}"
+        project = os.path.join(run_dir, "teachers")
+
+        # Memory/resume settings handed down by training/train_pipeline.py through the
+        # environment (the teacher is a full training run and needs the same limits as the
+        # other stages). Unset variables keep train()'s defaults.
+        env = os.environ
+        kwargs: dict = {}
+        for var, key, cast in (
+            ("PL_TEACHER_BATCH", "batch_size", int),
+            ("PL_TEACHER_WORKERS", "workers", int),
+            ("PL_TEACHER_IMGSZ", "imgsz", int),
+            ("PL_TEACHER_EPOCHS", "epochs", int),
+            ("PL_TEACHER_FRACTION", "fraction", float),
+        ):
+            if env.get(var):
+                kwargs[key] = cast(env[var])
+        if env.get("PL_TEACHER_CACHE"):
+            kwargs["cache"] = False if env["PL_TEACHER_CACHE"] == "off" else env["PL_TEACHER_CACHE"]
+        if env.get("PL_TEACHER_RESUME") == "1":
+            # Stable location + per-class name (data_yaml is teacher_class_<id>.yaml) so a
+            # restarted pipeline finds this teacher again: an unfinished one is resumed from
+            # its last.pt, a finished one is reused.
+            project = env.get("PL_TEACHER_PROJECT") or os.path.join(
+                os.path.dirname(run_dir.rstrip("/")) or ".", "teachers"
+            )
+            name = os.path.splitext(os.path.basename(data_yaml))[0] + "_run"
+            kwargs["resume"] = True
+
         results = _train(
             data=data_yaml,
             model=base_model or "yolo26s.pt",
-            project=os.path.join(run_dir, "teachers"),
+            project=project,
             name=name,
+            **kwargs,
         )
         return os.path.join(str(results.save_dir), "weights", "best.pt")
 

@@ -8,6 +8,8 @@ x-common-env: &common-env
   MLFLOW_TRACKING_URI: "https://mlflow.guilherme.zip"
   MLFLOW_TRACKING_USERNAME: "${MLFLOW_TRACKING_USERNAME:-admin}"
   MLFLOW_TRACKING_PASSWORD: "${MLFLOW_TRACKING_PASSWORD}"
+  # Log CPU, RAM, disk and GPU usage to the MLflow run (System Metrics tab)
+  MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING: "true"
   GIT_COMMIT_HASH: "${GIT_COMMIT_HASH:-unknown}"
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -110,8 +109,15 @@ def stage_generate_synthetic(
     output_dir: str = SYNTHETIC_DATASET_DIR,
     seed: int = 42,
     force: bool = False,
+    data_yaml: str | None = None,
 ) -> str:
     """Generate synthetic plates dataset using existing dataset images as backgrounds.
+
+    Backgrounds come from every dataset listed in ``data_yaml`` (train images for the
+    synthetic train split, val for val, test for test), each dataset used equally often.
+    The labels the background images already have are carried into the synthetic
+    labels, so real plates (and faces, ...) in them are not trained as background.
+    ``data_yaml`` supplies the class names for those carried-over labels.
 
     Idempotent: skips generation if ``output_dir`` already contains a valid
     YOLO dataset structure (train/val/test with images and a data.yaml).
@@ -132,14 +138,15 @@ def stage_generate_synthetic(
     logger.info("STAGE 1a: Generating synthetic plates dataset (%d images)", image_count)
     logger.info("=" * 60)
 
-    # Collect background images from existing datasets
-    bg_dir = _collect_backgrounds(DEFAULT_DATASETS_ROOT)
-
-    if not bg_dir or not os.listdir(bg_dir):
+    # Backgrounds: the images of every dataset in data.yaml, each split from its own split.
+    bg_dir = None
+    bg_sources = _background_sources(data_yaml, exclude=(output_dir, "label_sets"))
+    if "train" not in bg_sources:
         logger.warning(
-            "No background images found in %s. Using solid-color backgrounds instead.",
-            DEFAULT_DATASETS_ROOT,
+            "No background images found through %s. Using solid-color backgrounds instead.",
+            data_yaml,
         )
+        bg_sources = None
         bg_dir = _create_solid_backgrounds()
 
     from synthetic_plates.dataset_builder import build_dataset
@@ -153,6 +160,8 @@ def stage_generate_synthetic(
         val_split=0.1,
         test_split=0.05,
         seed=seed,
+        class_names=_class_names_of(data_yaml),
+        background_sources=bg_sources,
     )
     logger.info("Synthetic dataset ready: %s", yaml_path)
     return yaml_path
@@ -171,46 +180,46 @@ def _synthetic_dataset_valid(output_dir: str) -> bool:
     return True
 
 
-def _collect_backgrounds(datasets_root: str) -> str:
-    """Collect a subset of training images from existing datasets to use as backgrounds.
+def _class_names_of(data_yaml: str | None) -> list[str] | None:
+    """Return the class names declared in ``data_yaml`` (``None`` if unavailable)."""
+    if not data_yaml or not os.path.isfile(data_yaml):
+        return None
+    with open(data_yaml, "r", encoding="utf-8") as handle:
+        names = (yaml.safe_load(handle) or {}).get("names")
+    if isinstance(names, dict):
+        names = [names[k] for k in sorted(names)]
+    return list(names) if names else None
 
-    Returns path to a temporary directory with symlinks/copies of background images.
+
+def _background_sources(data_yaml: str | None, exclude: tuple[str, ...] = ()) -> dict[str, list[str]]:
+    """Return the image directories of each split declared in ``data_yaml``.
+
+    These are the backgrounds for the synthetic dataset: every dataset the training
+    uses, whatever its folder layout, and each split kept to itself so a validation
+    or test photo is never reused in synthetic training images. Entries whose path
+    contains one of ``exclude`` (the synthetic dataset itself) are skipped.
     """
-    import tempfile
-
-    bg_dir = os.path.join(tempfile.gettempdir(), "synthetic_backgrounds")
-    os.makedirs(bg_dir, exist_ok=True)
-
-    # Walk all train/images directories
-    src = Path(datasets_root)
-    if not src.exists():
-        return bg_dir
-
-    image_exts = {".jpg", ".jpeg", ".png", ".bmp"}
-    collected = 0
-    max_bg = 500  # cap backgrounds to avoid huge temp dirs
-
-    for img_dir in src.rglob("train/images"):
-        if not img_dir.is_dir():
-            continue
-        for img_path in img_dir.iterdir():
-            if img_path.suffix.lower() in image_exts:
-                dst = os.path.join(bg_dir, img_path.name)
-                if not os.path.exists(dst):
-                    try:
-                        os.link(img_path, dst)  # hardlink (fast, no disk waste)
-                    except OSError:
-                        try:
-                            shutil.copy2(img_path, dst)
-                        except OSError:
-                            continue
-                    collected += 1
-                if collected >= max_bg:
-                    logger.info("Collected %d background images from datasets", collected)
-                    return bg_dir
-
-    logger.info("Collected %d background images from datasets", collected)
-    return bg_dir
+    if not data_yaml or not os.path.isfile(data_yaml):
+        return {}
+    with open(data_yaml, "r", encoding="utf-8") as handle:
+        cfg = yaml.safe_load(handle) or {}
+    root = Path(cfg.get("path", "."))
+    if not root.is_absolute() and not root.exists():
+        root = Path(data_yaml).resolve().parent / root
+    skip = [Path(e).name for e in exclude]
+    sources: dict[str, list[str]] = {}
+    for split in ("train", "val", "test"):
+        entries = cfg.get(split) or []
+        if isinstance(entries, str):
+            entries = [entries]
+        dirs = []
+        for entry in entries:
+            path = Path(entry) if Path(entry).is_absolute() else root / entry
+            if path.is_dir() and not any(name in path.parts for name in skip):
+                dirs.append(str(path))
+        if dirs:
+            sources[split] = dirs
+    return sources
 
 
 def _create_solid_backgrounds() -> str:
@@ -245,6 +254,7 @@ def stage_pretrain(
     epochs: int = 50,
     batch_size: int = 16,
     device: str = "0",
+    **train_kwargs,
 ) -> str:
     """Pretrain a strong teacher model on real + synthetic data.
 
@@ -264,6 +274,7 @@ def stage_pretrain(
         batch_size=batch_size,
         epochs=epochs,
         device=device,
+        **train_kwargs,
     )
 
     best = best_weights_of(results)
@@ -280,6 +291,7 @@ def stage_pseudo_label(
     teacher_weights: str | None = None,
     base_model: str = "yolo26l.pt",
     force_regenerate: bool = False,
+    teacher_env: dict[str, str] | None = None,
 ) -> int:
     """Run pseudo-labeling with an optional pretrained teacher model.
 
@@ -290,6 +302,11 @@ def stage_pseudo_label(
     logger.info("=" * 60)
 
     from pseudo_labeling.__main__ import main as pseudo_main
+
+    # Pseudo-labeling trains one class-specialized teacher per class (a full training run
+    # each). Hand it the same memory limits as the other stages; see
+    # pseudo_labeling/backends.py::UltralyticsBackend.train.
+    os.environ.update(teacher_env or {})
 
     args = [
         "pipeline",
@@ -327,6 +344,7 @@ def stage_final_train(
     use_pseudo_labels: bool = True,
     skip_export: bool = False,
     mix_synthetic: bool = False,
+    **train_kwargs,
 ):
     """Train the final model on real + pseudo-labeled data.
 
@@ -372,6 +390,7 @@ def stage_final_train(
         device=device,
         project=project,
         name=name,
+        **train_kwargs,
     )
 
     best = best_weights_of(results)
@@ -459,6 +478,20 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Epochs for final training stage")
     p.add_argument("--batch-size", type=int, default=16,
                    help="Batch size")
+    p.add_argument("--final-batch-size", type=int, default=None,
+                   help="Batch size for the final stage (default: same as --batch-size)")
+    p.add_argument("--teacher-epochs", type=int, default=None,
+                   help="Epochs for the class-specialized teachers trained during "
+                        "pseudo-labeling (default: train_yolov26 default, 100)")
+    p.add_argument("--imgsz", type=int, default=640, help="Training image size")
+    p.add_argument("--workers", type=int, default=8, help="Dataloader workers")
+    p.add_argument("--cache", choices=["ram", "disk", "off"], default="ram",
+                   help="Image cache mode ('off' uses the least RAM)")
+    p.add_argument("--fraction", type=float, default=1.0,
+                   help="Fraction of the training set to use (smoke tests)")
+    p.add_argument("--resume", action="store_true",
+                   help="Resume interrupted training stages from their last.pt; "
+                        "finished stages are reused")
     p.add_argument("--regenerate-synthetic", action="store_true",
                    help="Force regeneration of the synthetic plates dataset")
     p.add_argument("--regenerate-pseudo", action="store_true",
@@ -487,6 +520,28 @@ def main(argv: list[str] | None = None) -> int:
     # Keep the original data.yaml path for stages that shouldn't see synthetic data.
     original_data_yaml = args.data
     teacher_weights = args.teacher_weights
+    train_kwargs = dict(
+        imgsz=args.imgsz,
+        workers=args.workers,
+        cache=False if args.cache == "off" else args.cache,
+        fraction=args.fraction,
+        resume=args.resume,
+    )
+
+    # Teachers are yolo26l-sized (they start from the pretrained weights), so they use the
+    # pretrain batch size.
+    teacher_env = {
+        "PL_TEACHER_BATCH": str(args.batch_size),
+        "PL_TEACHER_WORKERS": str(args.workers),
+        "PL_TEACHER_IMGSZ": str(args.imgsz),
+        "PL_TEACHER_CACHE": args.cache,
+        "PL_TEACHER_FRACTION": str(args.fraction),
+        "PL_TEACHER_PROJECT": os.path.join(args.project, "teachers"),
+    }
+    if args.teacher_epochs:
+        teacher_env["PL_TEACHER_EPOCHS"] = str(args.teacher_epochs)
+    if args.resume and not args.regenerate_pseudo:
+        teacher_env["PL_TEACHER_RESUME"] = "1"
 
     # ── Stage 1: Generate synthetic data + pretrain ──
     if args.synthetic > 0:
@@ -494,6 +549,7 @@ def main(argv: list[str] | None = None) -> int:
             image_count=args.synthetic,
             seed=args.synthetic,  # deterministic from count
             force=args.regenerate_synthetic,
+            data_yaml=args.data,
         )
         # Build a combined data.yaml (real + synthetic) ONLY for pretraining.
         combined_yaml = _inject_synthetic_into_data_yaml(args.data, SYNTHETIC_DATASET_DIR)
@@ -506,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
                 epochs=args.pretrain_epochs,
                 batch_size=args.batch_size,
                 device=args.device,
+                **train_kwargs,
             )
     elif args.pretrain:
         # Pretrain on real data only (still produces a strong teacher).
@@ -516,6 +573,7 @@ def main(argv: list[str] | None = None) -> int:
             epochs=args.pretrain_epochs,
             batch_size=args.batch_size,
             device=args.device,
+            **train_kwargs,
         )
 
     # ── Stage 2: Pseudo-labeling ──
@@ -527,6 +585,7 @@ def main(argv: list[str] | None = None) -> int:
             teacher_weights=teacher_weights,
             # base_model=args.base_model,
             force_regenerate=args.regenerate_pseudo,
+            teacher_env=teacher_env,
         )
         if rc != 0:
             logger.error("Pseudo-labeling failed with exit code %d", rc)
@@ -541,12 +600,13 @@ def main(argv: list[str] | None = None) -> int:
             data_yaml=original_data_yaml,
             # base_model=args.base_model,
             epochs=args.final_epochs,
-            batch_size=args.batch_size,
+            batch_size=args.final_batch_size or args.batch_size,
             device=args.device,
             project=args.project,
             name=args.name,
             skip_export=args.skip_export,
             mix_synthetic=args.mix_synthetic,
+            **train_kwargs,
         )
     else:
         logger.info("Skipping final training stage")
