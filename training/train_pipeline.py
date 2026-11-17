@@ -70,8 +70,12 @@ def _inject_synthetic_into_data_yaml(
     source_yaml: str,
     synthetic_dir: str,
     output_yaml: str | None = None,
+    splits: tuple[str, ...] = ("train", "val", "test"),
 ) -> str:
     """Add synthetic dataset paths to a copy of data.yaml and return the new path.
+
+    Only the splits in ``splits`` get the synthetic images. Pass ``("train",)`` to
+    train on them while validating (and picking ``best.pt``) on real images only.
 
     Paths are computed relative to the YAML's ``path`` field (the dataset root),
     *not* relative to the YAML file's directory. This ensures YOLO resolves
@@ -90,7 +94,7 @@ def _inject_synthetic_into_data_yaml(
             val = [val]
         # Add synthetic split if it exists
         synthetic_split = f"{synthetic_dir}/{key}/images"
-        if os.path.isdir(synthetic_split):
+        if key in splits and os.path.isdir(synthetic_split):
             # Compute path relative to the YAML's dataset root (e.g. ./datasets)
             rel = os.path.relpath(synthetic_split, yaml_root)
             if rel not in val:
@@ -369,10 +373,13 @@ def stage_final_train(
 
     # Optionally inject synthetic plates into the final training dataset
     if mix_synthetic and _synthetic_dataset_valid(SYNTHETIC_DATASET_DIR):
-        logger.info("Mixing synthetic plates into final training dataset")
+        # Train split only: the final model is used on real photos, so validation, early
+        # stopping and the choice of best.pt use real images only.
+        logger.info("Mixing synthetic plates into the final training split (val stays real-only)")
         train_data_yaml = _inject_synthetic_into_data_yaml(
             train_data_yaml, SYNTHETIC_DATASET_DIR,
-            output_yaml=train_data_yaml.replace(".yaml", "_with_synthetic.yaml"),
+            output_yaml=train_data_yaml.replace(".yaml", "_with_synthetic_train.yaml"),
+            splits=("train",),
         )
 
     from training.train_yolov26 import (
