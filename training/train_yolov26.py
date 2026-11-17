@@ -166,6 +166,15 @@ def train(
             logger.info("Run %s already finished — reusing it", resume_from.parent.parent)
             return SimpleNamespace(save_dir=resume_from.parent.parent)
         logger.info("Resuming from %s (last completed epoch index: %d)", resume_from, epoch)
+        # Continue the MLflow run of the interrupted attempt instead of opening a new one.
+        # MLflow resumes the run named in MLFLOW_RUN_ID; it is removed again afterwards so
+        # later stages (teachers, final model) still get runs of their own.
+        previous_run = _previous_mlflow_run(project_path, resume_from.parent.parent.name, name)
+        if previous_run and not os.environ.get("MLFLOW_RUN_ID"):
+            os.environ["MLFLOW_RUN_ID"] = previous_run
+            logger.info("Continuing MLflow run %s", previous_run)
+        else:
+            previous_run = None
         try:
             # Only memory-related settings may change on resume; the rest comes from the checkpoint.
             results = YOLO(str(resume_from)).train(
@@ -180,6 +189,9 @@ def train(
         except Exception as e:
             logger.error("Training failed: %s", e)
             raise
+        finally:
+            if previous_run:
+                os.environ.pop("MLFLOW_RUN_ID", None)
         logger.info(f"Training complete. Results saved to: {results.save_dir}")
         return results
     if resume:
@@ -238,6 +250,32 @@ def _find_last_checkpoint(project_path: Path, name: str) -> Path | None:
     """Return the newest ``last.pt`` among runs ``name``, ``name2``, ... under ``project_path``."""
     candidates = list(project_path.glob(f"{name}*/weights/last.pt"))
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
+
+
+def _previous_mlflow_run(project_path: Path, *run_names: str) -> str | None:
+    """Return the ID of the newest MLflow run of this training, or ``None``.
+
+    Ultralytics names the experiment after the project path (unless
+    ``MLFLOW_EXPERIMENT_NAME`` is set) and the run after the run directory. Any lookup
+    failure (no tracking server, no such run) returns ``None``: a new run is then opened.
+    """
+    if mlflow is None or not os.environ.get("MLFLOW_TRACKING_URI"):
+        return None
+    try:
+        experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME") or str(project_path)
+        for run_name in dict.fromkeys(n for n in run_names if n):
+            runs = mlflow.search_runs(
+                experiment_names=[experiment],
+                filter_string=f"attributes.run_name = '{run_name}'",
+                order_by=["attributes.start_time DESC"],
+                max_results=1,
+                output_format="list",
+            )
+            if runs:
+                return runs[0].info.run_id
+    except Exception as e:  # noqa: BLE001 - never block a resume on MLflow
+        logger.warning("Could not look up the previous MLflow run (%s); a new one will be opened", e)
+    return None
 
 
 def best_weights_of(results) -> Path:
