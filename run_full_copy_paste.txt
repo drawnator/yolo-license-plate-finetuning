@@ -1,0 +1,52 @@
+FULL TRAINING ON WINDOWS - ONE COPY-PASTE
+==========================================
+
+For a Windows machine with Docker Desktop and a 16 GB NVIDIA GPU.
+Same thing run_full.ps1 does, as one line. Not yet run on a 16 GB card or on
+native Windows: the batch sizes are scaled from measurements on an 8 GB card.
+
+Before pasting
+--------------
+1. Docker Desktop is running, with "Use the WSL 2 based engine" enabled in
+   Settings > General (the GPU only works through it).
+2. The datasets folder has been copied into this project folder.
+3. Open a terminal IN THIS PROJECT FOLDER.
+4. Replace PASSWORD in the line with the MLflow password.
+
+PowerShell (paste as one line)
+------------------------------
+docker build -t yolo-train:latest -f docker/Dockerfile . ; docker rm -f yolo-train ; docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "${PWD}/datasets:/datasets" -v "${PWD}/runs:/runs" -v "${PWD}/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 30 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log"
+
+Command Prompt / cmd.exe (paste as one line)
+--------------------------------------------
+docker build -t yolo-train:latest -f docker/Dockerfile . && (docker rm -f yolo-train & docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "%cd%/datasets:/datasets" -v "%cd%/runs:/runs" -v "%cd%/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 30 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log")
+
+What happens
+------------
+- The image is built (several minutes the first time) and the training starts
+  in the background. The terminal can be closed.
+- "No such container: yolo-train" on the first paste is normal.
+- The log is written to runs\logs\yolo-train.log. Metrics and CPU / RAM / GPU
+  usage go to MLflow. No other command is needed.
+- The whole run takes days. Checkpoints are saved every epoch under
+  angelicam\full\.
+
+If it stops or the computer restarts
+------------------------------------
+Paste the same line again. It continues from the last saved epoch.
+WARNING: pasting it while the training is still running restarts the
+container (it resumes from the last saved epoch, losing the current one).
+
+To stop it:   docker stop yolo-train
+
+Tuning (edit the numbers in the line)
+-------------------------------------
+--batch-size 8          large model stages. About 10 GB of GPU memory.
+--final-batch-size 16   final stage. About 8 GB; 24 should also fit.
+--teacher-epochs 30     epochs per pseudo-label teacher (they start from the pretrain).
+--workers 8             raise to 12-16 on a CPU with that many cores.
+
+In the first minutes look at the GPU_mem column in the log. If it is above
+about 14G, lower the batch size and paste again.
+
+To log to a different MLflow server, change MLFLOW_TRACKING_URI in the line.
