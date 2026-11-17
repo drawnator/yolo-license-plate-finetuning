@@ -23,6 +23,7 @@ LABEL_SETS_DIR=${LABEL_SETS_DIR:-datasets/label_sets}   # where pseudo-labels ar
 EXTRA_ARGS=${EXTRA_ARGS:-}
 BATCH=${BATCH:-4}               # yolo26l stages (pretrain + pseudo-label teachers)
 FINAL_BATCH=${FINAL_BATCH:-12}   # yolo26s final stage; use 8 if the desktop needs more VRAM
+TEACHER_EPOCHS=${TEACHER_EPOCHS:-30}  # pseudo-label teachers start from the pretrain; 100 is overkill
 
 mkdir -p datasets "$LABEL_SETS_DIR" runs/logs angelicam
 
@@ -51,7 +52,7 @@ docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g \
   bash -c "set -o pipefail; python -m training.train_pipeline \
     --synthetic 50000 --pretrain --skip-export --mix-synthetic \
     --project $PROJECT \
-    --batch-size $BATCH --final-batch-size $FINAL_BATCH \
+    --batch-size $BATCH --final-batch-size $FINAL_BATCH --teacher-epochs $TEACHER_EPOCHS \
     --imgsz 640 --workers 8 --cache off \
     --resume $EXTRA_ARGS \
     2>&1 | tee -a /runs/logs/$NAME.log"
