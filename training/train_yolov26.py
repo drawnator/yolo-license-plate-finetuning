@@ -204,6 +204,7 @@ def train(
     # --- Start training ---
     logger.info(f"Loading model {model}...")
     yolo = YOLO(model)
+    tracking.attach(yolo, stage=name, data_yaml=str(data_path))
 
     try:
         #https://docs.ultralytics.com/modes/train#train-settings
@@ -321,8 +322,10 @@ def log_model_to_mlflow(
     (e.g. a zipped self-supervised label set). If no prior run is found it falls back to a
     new run so standalone use still logs something.
 
-    Uses ``mlflow.pytorch.log_model`` on the underlying YOLO module, falling back to logging
-    the raw ``best.pt`` as an artifact if model logging is unavailable.
+    The model is stored once, as ``weights/best.pt`` (the file Ultralytics and the
+    inference scripts load). A second pickled copy via ``mlflow.pytorch`` only doubled
+    the run's size. With ``register=True`` that file becomes a new version in the Model
+    Registry (see ``training/tracking.py::register_model``).
 
     If ``data_yaml`` is provided, its contents are logged as ``data_yaml_used.yaml`` so the
     exact dataset configuration used for training is preserved in the run.
