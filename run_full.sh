@@ -14,6 +14,15 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Experiments (all optional; see training/IMPROVEMENT_PLAN.md):
+#   EXPERIMENT_NOTE="why this run exists"    -> MLflow run description
+#   EXPERIMENT_IDEA=aug-light                 -> tag, key from training/EXPERIMENT_IDEAS.md
+#   EXPERIMENT_BASELINE=<mlflow run id>       -> tag, the run this one is compared with
+#   TEACHER_WEIGHTS=angelicam/full/pretrain/pretrain/weights/best.pt
+#                                             -> skip the pretrain and use these weights
+#   TRAIN_PROJECT=angelicam/exp-aug-light     -> a new folder = new runs; reused stages:
+#                                                synthetic set and pseudo-label set (shared)
+#
 # Overridable for smoke tests, e.g.:
 #   TRAIN_NAME=memtest-e2e TRAIN_PROJECT=angelicam/memtest/e2e LABEL_SETS_DIR=runs/memtest_label_sets \
 #   MLFLOW_TRACKING_URI= EXTRA_ARGS="--fraction 0.02 --pretrain-epochs 1 --final-epochs 1" ./run_full.sh
@@ -23,9 +32,20 @@ LABEL_SETS_DIR=${LABEL_SETS_DIR:-datasets/label_sets}   # where pseudo-labels ar
 EXTRA_ARGS=${EXTRA_ARGS:-}
 BATCH=${BATCH:-4}               # yolo26l stages (pretrain + pseudo-label teachers)
 FINAL_BATCH=${FINAL_BATCH:-12}   # yolo26s final stage; use 8 if the desktop needs more VRAM
-TEACHER_EPOCHS=${TEACHER_EPOCHS:-30}  # pseudo-label teachers start from the pretrain; 100 is overkill
+TEACHER_EPOCHS=${TEACHER_EPOCHS:-15}  # pseudo-label teachers start from the pretrain; 100 is overkill
+TEACHER_LR0=${TEACHER_LR0:-0.001}     # low learning rate: fine-tune the pretrain, don't undo it
 
 mkdir -p datasets "$LABEL_SETS_DIR" runs/logs angelicam
+
+# Stage 1: train the pretrain, or reuse existing weights (path inside the project folder).
+if [ -n "${TEACHER_WEIGHTS:-}" ]; then
+  [ -f "$TEACHER_WEIGHTS" ] || { echo "TEACHER_WEIGHTS not found: $TEACHER_WEIGHTS" >&2; exit 1; }
+  PRETRAIN_ARGS="--teacher-weights /$TEACHER_WEIGHTS"
+else
+  PRETRAIN_ARGS="--pretrain"
+fi
+GIT_DIRTY=false
+[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ] && GIT_DIRTY=true
 
 if [ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = "true" ]; then
   echo "$NAME is already running. Stop it first: docker stop $NAME" >&2
@@ -44,15 +64,21 @@ docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g \
   -e MLFLOW_TRACKING_PASSWORD="${MLFLOW_TRACKING_PASSWORD:-}" \
   -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true \
   -e GIT_COMMIT_HASH="$(git rev-parse HEAD 2>/dev/null || echo unknown)" \
+  -e GIT_DIRTY="$GIT_DIRTY" \
+  -e HOST_LABEL="$(hostname)" \
+  -e EXPERIMENT_NOTE="${EXPERIMENT_NOTE:-}" \
+  -e EXPERIMENT_IDEA="${EXPERIMENT_IDEA:-}" \
+  -e EXPERIMENT_BASELINE="${EXPERIMENT_BASELINE:-}" \
+  -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-license-plate}" \
   -v "$PWD/datasets:/datasets" \
   -v "$PWD/runs:/runs" \
   -v "$PWD/angelicam:/angelicam" \
   -v "$PWD/$LABEL_SETS_DIR:/datasets/label_sets" \
   yolo-train:latest \
   bash -c "set -o pipefail; python -m training.train_pipeline \
-    --synthetic 50000 --pretrain --skip-export --mix-synthetic \
+    --synthetic 50000 $PRETRAIN_ARGS --skip-export --mix-synthetic \
     --project $PROJECT \
-    --batch-size $BATCH --final-batch-size $FINAL_BATCH --teacher-epochs $TEACHER_EPOCHS \
+    --batch-size $BATCH --final-batch-size $FINAL_BATCH --teacher-epochs $TEACHER_EPOCHS --teacher-lr0 $TEACHER_LR0 \
     --imgsz 640 --workers 8 --cache off \
     --resume $EXTRA_ARGS \
     2>&1 | tee -a /runs/logs/$NAME.log"

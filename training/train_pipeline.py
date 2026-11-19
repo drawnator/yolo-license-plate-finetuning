@@ -348,6 +348,7 @@ def stage_final_train(
     use_pseudo_labels: bool = True,
     skip_export: bool = False,
     mix_synthetic: bool = False,
+    description: str = "",
     **train_kwargs,
 ):
     """Train the final model on real + pseudo-labeled data.
@@ -414,6 +415,13 @@ def stage_final_train(
             exported,
             data_yaml=train_data_yaml,
             params={"commit_hash": _get_git_hash(), "stage": "final"},
+            register=True,
+            register_description=description,
+            register_tags={
+                "commit": _get_git_hash(),
+                "project": project,
+                "parent_run": os.environ.get("MLFLOW_PARENT_RUN_ID", ""),
+            },
         )
 
     return results
@@ -528,6 +536,34 @@ def main(argv: list[str] | None = None) -> int:
     commit_hash = _get_git_hash()
     logger.info("Git commit: %s", commit_hash)
 
+    # One MLflow parent run per launch; every stage's run is nested under it.
+    from training import tracking
+
+    dirty = os.environ.get("GIT_DIRTY", "").lower() in ("1", "true", "yes")
+    description = tracking.describe_launch(
+        args, vars(build_parser().parse_args([])), os.environ.get("EXPERIMENT_NOTE", ""),
+        commit_hash, dirty,
+    )
+    tracking.start_pipeline_run(args.project, description, {
+        "mlflow.source.git.commit": commit_hash,
+        "git.dirty": str(dirty).lower(),
+        "experiment.idea": os.environ.get("EXPERIMENT_IDEA"),
+        "experiment.baseline": os.environ.get("EXPERIMENT_BASELINE"),
+        "host": os.environ.get("HOST_LABEL"),
+        "pipeline.project": args.project,
+    })
+    try:
+        rc = _run_stages(args, commit_hash, description)
+    except BaseException:
+        tracking.end_pipeline_run("FAILED")
+        raise
+    tracking.end_pipeline_run("FINISHED" if rc == 0 else "FAILED")
+    return rc
+
+
+def _run_stages(args, commit_hash: str, description: str) -> int:
+    """Run the enabled stages in order; returns the exit code."""
+
     # Keep the original data.yaml path for stages that shouldn't see synthetic data.
     original_data_yaml = args.data
     teacher_weights = args.teacher_weights
@@ -619,6 +655,7 @@ def main(argv: list[str] | None = None) -> int:
             name=args.name,
             skip_export=args.skip_export,
             mix_synthetic=args.mix_synthetic,
+            description=description,
             **train_kwargs,
         )
     else:

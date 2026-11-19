@@ -28,6 +28,11 @@ except ImportError:
 
 from ultralytics import YOLO
 
+try:
+    from training import tracking
+except ImportError:  # run as a plain script from inside training/
+    import tracking  # type: ignore
+
 logger = logging.getLogger(__name__)
 # https://docs.ultralytics.com/guides/yolo-data-augmentation#custom-albumentations-transforms-augmentations
 # custom_transforms = [
@@ -159,6 +164,9 @@ def train(
     project_path.mkdir(parents=True, exist_ok=True)
     logger.info(f"Training outputs will be saved to: {project_path}")
 
+    # A tracking-server hiccup at start-up makes Ultralytics train the whole run untracked.
+    _wait_for_mlflow()
+
     # --- Resume an interrupted run if asked ---
     resume_from = _find_last_checkpoint(project_path, name) if resume else None
     if resume_from is not None:
@@ -181,7 +189,9 @@ def train(
             previous_run = None
         try:
             # Only memory-related settings may change on resume; the rest comes from the checkpoint.
-            results = YOLO(str(resume_from)).train(
+            resumed = YOLO(str(resume_from))
+            tracking.attach(resumed, stage=name, data_yaml=str(data_path))
+            results = resumed.train(
                 resume=True,
                 data=str(data_path),
                 batch=batch_size,
@@ -258,6 +268,43 @@ def _find_last_checkpoint(project_path: Path, name: str) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
+def _wait_for_mlflow(attempts: int = 20, delay_s: float = 30.0) -> bool:
+    """Wait until the MLflow tracking server answers (up to ``attempts * delay_s``).
+
+    Returns True when it answers or no remote server is configured. If it never answers,
+    logs an error and returns False: training then goes ahead, but untracked, since
+    stopping a multi-day pipeline for a tracking outage would cost more.
+    """
+    uri = os.environ.get("MLFLOW_TRACKING_URI", "")
+    if mlflow is None or not uri.startswith(("http://", "https://")):
+        return True
+    import time
+    import urllib.request
+
+    # The MLflow client's own user agent: the server's Cloudflare front answers 403 to
+    # Python's default one.
+    request = urllib.request.Request(
+        uri.rstrip("/") + "/health",
+        headers={"User-Agent": f"mlflow-python-client/{mlflow.__version__}"},
+    )
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status == 200:
+                    if attempt > 1:
+                        logger.info("MLflow server is reachable again")
+                    return True
+                problem = f"HTTP {response.status}"
+        except Exception as e:  # noqa: BLE001 - network errors of any kind
+            problem = str(e)
+        logger.warning("MLflow server not reachable (%s), attempt %d/%d; retrying in %.0f s",
+                       problem, attempt, attempts, delay_s)
+        time.sleep(delay_s)
+    logger.error("MLflow server still unreachable after %d attempts: this training will NOT "
+                 "be tracked in MLflow", attempts)
+    return False
+
+
 def _previous_mlflow_run(project_path: Path, *run_names: str) -> str | None:
     """Return the ID of the newest MLflow run of this training, or ``None``.
 
@@ -269,10 +316,13 @@ def _previous_mlflow_run(project_path: Path, *run_names: str) -> str | None:
         return None
     try:
         experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME") or str(project_path)
+        # Within a pipeline launch, only this launch's runs (same parent) are candidates.
+        parent = os.environ.get(tracking.PARENT_ENV)
+        parent_filter = f" and tags.mlflow.parentRunId = '{parent}'" if parent else ""
         for run_name in dict.fromkeys(n for n in run_names if n):
             runs = mlflow.search_runs(
                 experiment_names=[experiment],
-                filter_string=f"attributes.run_name = '{run_name}'",
+                filter_string=f"attributes.run_name = '{run_name}'" + parent_filter,
                 order_by=["attributes.start_time DESC"],
                 max_results=1,
                 output_format="list",
@@ -312,6 +362,9 @@ def log_model_to_mlflow(
     params: dict | None = None,
     artifacts: list | None = None,
     data_yaml: str | None = None,
+    register: bool = False,
+    register_description: str = "",
+    register_tags: dict | None = None,
 ) -> None:
     """Add proper model logging to the MLflow run Ultralytics already created.
 
@@ -335,15 +388,10 @@ def log_model_to_mlflow(
         return
 
     try:
-        # Alias import: a bare `import mlflow.pytorch` here would make `mlflow` a local
-        # name and break the `mlflow is None` check above with UnboundLocalError.
-        from mlflow import pytorch as mlflow_pytorch
-
         # Resume the run Ultralytics created during training (keep its auto-logged data).
         last = mlflow.last_active_run()
         run_id = last.info.run_id if last is not None else None
 
-        yolo = YOLO(str(weights_path))
         with mlflow.start_run(run_id=run_id):
             for key, value in (params or {}).items():
                 mlflow.log_param(key, value)
@@ -353,12 +401,13 @@ def log_model_to_mlflow(
                 mlflow.log_artifact(data_yaml, artifact_path="config")
                 logger.info("Logged training data.yaml to MLflow: %s", data_yaml)
 
-            try:
-                mlflow_pytorch.log_model(yolo.model, artifact_path="model")
-                logger.info("Logged model to MLflow (pytorch flavor)")
-            except Exception as e:  # noqa: BLE001 - fall back to a plain weights artifact
-                logger.error("log_model failed (%s); logging raw weights instead", e)
-                mlflow.log_artifact(str(weights_path), artifact_path="model")
+            # best.pt is already in the run (weights/best.pt, uploaded at the end of
+            # training); upload it here only if that did not happen.
+            client = mlflow.MlflowClient()
+            if run_id is None or not any(
+                f.path.endswith("best.pt") for f in client.list_artifacts(run_id, "weights")
+            ):
+                mlflow.log_artifact(str(weights_path), artifact_path="weights")
 
             if exported_path is not None and Path(exported_path).exists():
                 mlflow.log_artifact(str(exported_path), artifact_path="coreml")
@@ -367,6 +416,10 @@ def log_model_to_mlflow(
                 if art and Path(art).exists():
                     mlflow.log_artifact(str(art))
                     logger.info("Logged artifact to MLflow: %s", art)
+        if register:
+            run_id = run_id or mlflow.last_active_run().info.run_id
+            tracking.register_model(run_id, description=register_description,
+                                    tags=register_tags)
     except Exception as e:  # noqa: BLE001 - logging must never fail the run
         logger.error("MLflow model logging failed: %s", e)
 
