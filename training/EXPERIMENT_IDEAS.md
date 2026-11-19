@@ -11,6 +11,10 @@ run as the baseline, on the **real** validation and test images only.
 - **Teachers capped at 30 epochs** (`--teacher-epochs 30`, was 100). 30 is a guess: check
   each teacher's `results.csv` for the epoch where mAP50-95 peaks and adjust.
 
+Problems found in the 2026-11-16 run (pseudo-labels written into val/test, duplicate
+car/motorcycle teachers, teachers barely improving, a run lost to an MLflow outage) are
+scheduled as phase 1 of `IMPROVEMENT_PLAN.md`.
+
 ## Model selection and early stopping
 
 | Idea | Why | How to test |
