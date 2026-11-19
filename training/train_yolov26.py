@@ -93,6 +93,7 @@ def train(
     imgsz: int = 640,
     fraction: float = 1.0,
     resume: bool = False,
+    **overrides,
 ):
     """
     Fine-tune YOLOv26 on a license plate dataset.
@@ -113,6 +114,9 @@ def train(
         resume: Continue the newest unfinished run of ``name`` under ``project``
             from its ``last.pt`` instead of starting over. A run that already
             finished is reused as-is.
+        **overrides: Any other Ultralytics training argument (``lr0``, ``optimizer``,
+            ``degrees``, ...). Applied last, so they replace the defaults below.
+            Ignored on resume, where the checkpoint's settings apply.
 
     Returns:
         Ultralytics training results.
@@ -203,7 +207,7 @@ def train(
 
     try:
         #https://docs.ultralytics.com/modes/train#train-settings
-        results = yolo.train(
+        settings = dict(
             data=str(data_path),
             batch=batch_size,
             epochs=epochs,
@@ -232,8 +236,9 @@ def train(
             mixup=0.1,
             # augmentations=custom_transforms,
             copy_paste=0.2,
-
         )
+        settings.update(overrides)
+        results = yolo.train(**settings)
     except KeyboardInterrupt:
         logger.info("\nTraining interrupted by user. Partial checkpoint may be in: %s", project_path)
         sys.exit(1)

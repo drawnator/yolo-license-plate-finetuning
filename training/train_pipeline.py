@@ -490,6 +490,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--teacher-epochs", type=int, default=None,
                    help="Epochs for the class-specialized teachers trained during "
                         "pseudo-labeling (default: train_yolov26 default, 100)")
+    p.add_argument("--teacher-lr0", type=float, default=None,
+                   help="Starting learning rate for the teachers (with SGD; the default "
+                        "optimizer=auto ignores lr0). They start from a trained model, so "
+                        "a low value such as 0.001 fine-tunes it instead of undoing it")
     p.add_argument("--imgsz", type=int, default=640, help="Training image size")
     p.add_argument("--workers", type=int, default=8, help="Dataloader workers")
     p.add_argument("--cache", choices=["ram", "disk", "off"], default="ram",
@@ -547,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.teacher_epochs:
         teacher_env["PL_TEACHER_EPOCHS"] = str(args.teacher_epochs)
+    if args.teacher_lr0:
+        teacher_env["PL_TEACHER_LR0"] = str(args.teacher_lr0)
     if args.resume and not args.regenerate_pseudo:
         teacher_env["PL_TEACHER_RESUME"] = "1"
 

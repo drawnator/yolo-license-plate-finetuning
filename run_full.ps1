@@ -26,7 +26,8 @@ $Name       = Setting 'TRAIN_NAME'    'yolo-train'
 $Project    = Setting 'TRAIN_PROJECT' 'angelicam/full'
 $Batch      = Setting 'BATCH'         '8'     # yolo26l stages (pretrain + pseudo-label teachers)
 $FinalBatch = Setting 'FINAL_BATCH'   '16'    # yolo26s final stage; 24 should fit (estimate, not measured)
-$TeacherEpochs = Setting 'TEACHER_EPOCHS' '30'  # pseudo-label teachers start from the pretrain
+$TeacherEpochs = Setting 'TEACHER_EPOCHS' '15'  # pseudo-label teachers start from the pretrain
+$TeacherLr0 = Setting 'TEACHER_LR0' '0.001'  # low learning rate: fine-tune the pretrain, don't undo it
 $Workers    = Setting 'WORKERS'       '8'     # raise to 12-16 on a CPU with that many cores
 $Memory     = Setting 'MEMORY'        '44g'   # must fit inside Docker Desktop's memory limit
 $MemorySwap = Setting 'MEMORY_SWAP'   '60g'
@@ -59,7 +60,7 @@ if (-not $commit) { $commit = 'unknown' }
 $train = "set -o pipefail; python -m training.train_pipeline " +
     "--synthetic 50000 --pretrain --skip-export --mix-synthetic " +
     "--project $Project " +
-    "--batch-size $Batch --final-batch-size $FinalBatch --teacher-epochs $TeacherEpochs " +
+    "--batch-size $Batch --final-batch-size $FinalBatch --teacher-epochs $TeacherEpochs --teacher-lr0 $TeacherLr0 " +
     "--imgsz 640 --workers $Workers --cache off " +
     "--resume $ExtraArgs " +
     "2>&1 | tee -a /runs/logs/$Name.log"

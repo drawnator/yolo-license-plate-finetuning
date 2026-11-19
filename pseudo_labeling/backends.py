@@ -104,6 +104,11 @@ class UltralyticsBackend:
         ):
             if env.get(var):
                 kwargs[key] = cast(env[var])
+        if env.get("PL_TEACHER_LR0"):
+            # Teachers start from an already trained model: a low learning rate fine-tunes
+            # it instead of partly undoing it. optimizer="auto" would ignore lr0.
+            kwargs["lr0"] = float(env["PL_TEACHER_LR0"])
+            kwargs["optimizer"] = env.get("PL_TEACHER_OPTIMIZER") or "SGD"
         if env.get("PL_TEACHER_CACHE"):
             kwargs["cache"] = False if env["PL_TEACHER_CACHE"] == "off" else env["PL_TEACHER_CACHE"]
         if env.get("PL_TEACHER_RESUME") == "1":

@@ -15,11 +15,11 @@ Before pasting
 
 PowerShell (paste as one line)
 ------------------------------
-docker build -t yolo-train:latest -f docker/Dockerfile . ; docker rm -f yolo-train ; docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "${PWD}/datasets:/datasets" -v "${PWD}/runs:/runs" -v "${PWD}/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 30 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log"
+docker build -t yolo-train:latest -f docker/Dockerfile . ; docker rm -f yolo-train ; docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "${PWD}/datasets:/datasets" -v "${PWD}/runs:/runs" -v "${PWD}/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 15 --teacher-lr0 0.001 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log"
 
 Command Prompt / cmd.exe (paste as one line)
 --------------------------------------------
-docker build -t yolo-train:latest -f docker/Dockerfile . && (docker rm -f yolo-train & docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "%cd%/datasets:/datasets" -v "%cd%/runs:/runs" -v "%cd%/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 30 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log")
+docker build -t yolo-train:latest -f docker/Dockerfile . && (docker rm -f yolo-train & docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g --name yolo-train -e PYTHONUNBUFFERED=1 -e PYTHONDONTWRITEBYTECODE=1 -e MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=true -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip -e MLFLOW_TRACKING_USERNAME=admin -e MLFLOW_TRACKING_PASSWORD=PASSWORD -v "%cd%/datasets:/datasets" -v "%cd%/runs:/runs" -v "%cd%/angelicam:/angelicam" yolo-train:latest bash -c "set -o pipefail; mkdir -p /runs/logs /datasets/label_sets; python -m training.train_pipeline --synthetic 50000 --pretrain --skip-export --mix-synthetic --project angelicam/full --batch-size 8 --final-batch-size 16 --teacher-epochs 15 --teacher-lr0 0.001 --imgsz 640 --workers 8 --cache off --resume 2>&1 | tee -a /runs/logs/yolo-train.log")
 
 What happens
 ------------
@@ -43,7 +43,8 @@ Tuning (edit the numbers in the line)
 -------------------------------------
 --batch-size 8          large model stages. About 10 GB of GPU memory.
 --final-batch-size 16   final stage. About 8 GB; 24 should also fit.
---teacher-epochs 30     epochs per pseudo-label teacher (they start from the pretrain).
+--teacher-epochs 15     epochs per pseudo-label teacher (they start from the pretrain).
+--teacher-lr0 0.001     low learning rate for the teachers, so they fine-tune it.
 --workers 8             raise to 12-16 on a CPU with that many cores.
 
 In the first minutes look at the GPU_mem column in the log. If it is above
