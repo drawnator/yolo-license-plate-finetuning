@@ -58,6 +58,9 @@ ApprovalFn = Callable[[int], bool]
 _VEHICLE_CLASSES = frozenset({2, 3})
 _RODOSOL_PREFIX = "RodoSol"
 
+#: Splits that receive pseudo-labels; val/test stay human-labelled for honest scoring.
+PSEUDO_LABEL_SPLITS = frozenset({"train"})
+
 
 @dataclass
 class RunOutcome:
@@ -136,6 +139,11 @@ class PseudoLabelingSystem:
         accepted: dict[tuple[str, str, str], list[PseudoLabel]] = {}
         audit = AuditReport()
 
+        # Teachers keyed by the datasets they train on: classes found in the same datasets
+        # (car and motorcycle both come only from UFPR-ALPR) share one teacher instead of
+        # training identical copies. Its predictions are filtered per class below.
+        teachers_by_datasets: dict[frozenset, str | None] = {}
+
         for target_class in sorted(UNIFIED_IDS):
             missing = [s for s in scans if self._is_absent(cov_by_id.get(s.dataset_id), target_class)]
             if not missing:
@@ -149,15 +157,27 @@ class PseudoLabelingSystem:
                 )
                 continue  # Req 4.5 - cannot filter this class; skip it.
 
-            teacher = self._train_teacher(
-                target_class, coverages, config, run_dir, seed, manifest, diagnostics
-            )
+            teacher_key = frozenset(self.trainer.datasets_containing(target_class, coverages))
+            if teacher_key in teachers_by_datasets:
+                teacher = teachers_by_datasets[teacher_key]
+                if teacher is not None:
+                    manifest.teacher_models[target_class] = teacher
+                    manifest.training_datasets[target_class] = sorted(teacher_key)
+            else:
+                teacher = self._train_teacher(
+                    target_class, coverages, config, run_dir, seed, manifest, diagnostics
+                )
+                teachers_by_datasets[teacher_key] = teacher
             if teacher is None:
                 continue
             model = self.backend.load(teacher)
 
             for scan in missing:
                 for split, refs in scan.images_by_split.items():
+                    # Only the training split gets pseudo-labels. Val and test keep their
+                    # human labels, so models are scored against people, not a teacher.
+                    if split not in PSEUDO_LABEL_SPLITS:
+                        continue
                     for ref in refs:
                         self._generate_for_ref(
                             generator, model, ref, target_class, threshold,
@@ -174,6 +194,8 @@ class PseudoLabelingSystem:
         # Zero-accepted-label accounting (Req 7.6).
         for scan in scans:
             for split, refs in scan.images_by_split.items():
+                if split not in PSEUDO_LABEL_SPLITS:
+                    continue
                 for ref in refs:
                     if not accepted.get((ref.dataset_id, split, ref.image_path)):
                         audit.record_zero_label_image(ref.dataset_id, split)
