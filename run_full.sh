@@ -32,8 +32,13 @@ LABEL_SETS_DIR=${LABEL_SETS_DIR:-datasets/label_sets}   # where pseudo-labels ar
 EXTRA_ARGS=${EXTRA_ARGS:-}
 BATCH=${BATCH:-4}               # yolo26l stages (pretrain + pseudo-label teachers)
 FINAL_BATCH=${FINAL_BATCH:-12}   # yolo26s final stage; use 8 if the desktop needs more VRAM
-TEACHER_EPOCHS=${TEACHER_EPOCHS:-15}  # pseudo-label teachers start from the pretrain; 100 is overkill
-TEACHER_LR0=${TEACHER_LR0:-0.001}     # low learning rate: fine-tune the pretrain, don't undo it
+TEACHER_EPOCHS=${TEACHER_EPOCHS:-30}  # pseudo-label teachers start from the pretrain; 100 is overkill
+# Teachers must unlearn the pretrain's habit of treating unlabelled cars as background, so
+# they keep the default optimizer (lr 0.01). A low TEACHER_LR0 (e.g. 0.001) is opt-in: at
+# 0.001 for 15 epochs the teachers proposed no pseudo-labels at all.
+TEACHER_LR0=${TEACHER_LR0:-}
+TEACHER_ARGS="--teacher-epochs $TEACHER_EPOCHS"
+[ -n "$TEACHER_LR0" ] && TEACHER_ARGS="$TEACHER_ARGS --teacher-lr0 $TEACHER_LR0"
 
 mkdir -p datasets "$LABEL_SETS_DIR" runs/logs angelicam
 
@@ -78,7 +83,7 @@ docker run -d --gpus all --memory=44g --memory-swap=60g --shm-size=8g \
   bash -c "set -o pipefail; python -m training.train_pipeline \
     --synthetic 50000 $PRETRAIN_ARGS --skip-export --mix-synthetic \
     --project $PROJECT \
-    --batch-size $BATCH --final-batch-size $FINAL_BATCH --teacher-epochs $TEACHER_EPOCHS --teacher-lr0 $TEACHER_LR0 \
+    --batch-size $BATCH --final-batch-size $FINAL_BATCH $TEACHER_ARGS \
     --imgsz 640 --workers 8 --cache off \
     --resume $EXTRA_ARGS \
     2>&1 | tee -a /runs/logs/$NAME.log"
