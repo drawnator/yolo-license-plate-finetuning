@@ -7,6 +7,10 @@ benchmark, so any two models can be compared and downloaded later.
 Order matters: phases 1 to 3 make results trustworthy and cheap; only then is it worth
 running experiments (phase 4).
 
+**Status (2026-11-20):** the first phase 1 baseline ran without pseudo-labels (item 3
+below); it was kept as the "no pseudo-labels" data point and the baseline was restarted
+with the old teacher settings.
+
 **Status (2026-11-19):** phases 1 to 3 and the stage reuse of phase 4 are implemented;
 see "How to use it" at the end. Not done yet: scoring each teacher on its own class
 (phase 1, item 2; duplicate teachers are removed instead).
@@ -20,9 +24,15 @@ see "How to use it" at the end. Not done yet: scoring each teacher on its own cl
    trained on the same data with the same settings and came out identical. Either train
    once per dataset, or restrict each teacher to its class (`classes=[target]`) so its
    score and early stopping reflect that class.
-3. **Lower teacher learning rate.** Teachers improved only 0.728 to 0.748 in 30 epochs,
-   probably because the default starting learning rate undoes part of the pretrain
-   (untested guess). Try `lr0=0.001` with about 10 epochs.
+3. ~~**Lower teacher learning rate.**~~ Tried and reverted (2026-11-20). With SGD at
+   `lr0=0.001` for 15 epochs the teachers scored well on their own data (vehicles 0.81
+   mAP50-95) but proposed **0 pseudo-labels**. The pretrain learned from datasets where
+   cars are unlabelled, so it treats cars in Brazil, FACE and RodoSol images as
+   background; the pretrain itself finds cars only in UFPR images. The old setting
+   (`optimizer=auto`, lr 0.01, 30 epochs) retrains enough to undo that and produced
+   12,803 labels. The teachers' own validation can't show this, because it only uses
+   the dataset they train on. The pipeline now stops if no label set is produced
+   instead of training without one. `TEACHER_LR0` is still available but opt-in.
 4. **MLflow outages must not drop a run.** A single Cloudflare 522 at start-up made
    Ultralytics train teacher 2 untracked. Check the server before each stage and retry.
 

@@ -28,6 +28,7 @@ scheduled as phase 1 of `IMPROVEMENT_PLAN.md`.
 | Idea | Why | How to test |
 |---|---|---|
 | Teachers from COCO `yolo26l.pt` instead of the pretrain | The pretrain's main gain is on plates (synthetic data), but plates are not pseudo-labelled; the teachers are for face, car and motorcycle | Run stage 2 both ways, compare the pseudo-labels against a hand-checked sample |
+| Measure teachers on the datasets they label | A teacher's validation uses only its own dataset, so a teacher that misses every car outside UFPR still scores 0.81 (see plan, phase 1 item 3) | Hand-label a small sample of the target datasets per class, report teacher recall there |
 | Distil the pretrain into the final model | The final `yolo26s` starts from COCO weights and gets nothing directly from the 36-hour pretrain | Ultralytics shows a `distill_model` training argument; check what it supports before relying on it |
 | Final model without pseudo-labels | Measures how much stage 2 actually adds | Final stage on the original `data.yaml` |
 
