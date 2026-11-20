@@ -368,8 +368,12 @@ def stage_final_train(
             train_data_yaml = resolved
             logger.info("Training on label-set data.yaml: %s", train_data_yaml)
         else:
-            logger.warning(
-                "Could not resolve label-set data.yaml; falling back to %s", data_yaml
+            # Stop instead of quietly training without pseudo-labels: a run labelled as
+            # "real + pseudo-labels" that has none would be compared as if it had them.
+            raise RuntimeError(
+                "No pseudo-label set found (did the teachers propose any labels? see "
+                "audit_report.json under runs/pseudo_labeling). Fix the teachers, or pass "
+                "--no-pseudo-labels to train the final model without them on purpose."
             )
 
     # Optionally inject synthetic plates into the final training dataset
@@ -472,7 +476,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pretrain", action="store_true",
                    help="Run pretraining stage")
     p.add_argument("--skip-pseudo", dest="skip_pseudo", action="store_true",
-                   help="Skip pseudo-labeling stage")
+                   help="Skip pseudo-labeling stage (the final stage still uses an "
+                        "existing label set)")
+    p.add_argument("--no-pseudo-labels", dest="no_pseudo_labels", action="store_true",
+                   help="Train the final model on the original labels only (implies "
+                        "--skip-pseudo)")
     p.add_argument("--skip-final", dest="skip_final", action="store_true",
                    help="Skip final training stage")
 
@@ -628,7 +636,7 @@ def _run_stages(args, commit_hash: str, description: str) -> int:
     # ── Stage 2: Pseudo-labeling ──
     # ALWAYS use the original data.yaml here — synthetic plates have no faces,
     # cars or motorcycles, so pseudo-labeling on them is wasteful and noisy.
-    if not args.skip_pseudo:
+    if not (args.skip_pseudo or args.no_pseudo_labels):
         rc = stage_pseudo_label(
             data_yaml=original_data_yaml,
             teacher_weights=teacher_weights,
@@ -655,6 +663,7 @@ def _run_stages(args, commit_hash: str, description: str) -> int:
             name=args.name,
             skip_export=args.skip_export,
             mix_synthetic=args.mix_synthetic,
+            use_pseudo_labels=not args.no_pseudo_labels,
             description=description,
             **train_kwargs,
         )
