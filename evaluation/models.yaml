@@ -1,0 +1,117 @@
+# Models compared by the benchmark and the dashboard.
+#
+#   python -m evaluation.benchmark --catalog evaluation/models.yaml   # score every entry
+#   python -m evaluation.export_results                               # -> evaluation/results/
+#   python -m evaluation.dashboard                                    # http://localhost:8000
+#
+# Fields:
+#   id        short unique name shown in the dashboard
+#   ref       where the weights come from (see evaluation/model_store.py):
+#             release:<tag> (GitHub release), runs:/<run id>, <name>/<version>, or a file
+#   run_id    MLflow training run, when the ref is not already one (benchmark scores are
+#             copied onto it as bench.* tags)
+#   size      YOLO size: n, s, m, l
+#   date      when the model was trained (from the checkpoint)
+#   pipeline  how it was made, in a few words
+#   notes     anything that matters when comparing it
+#   partial   true for an unfinished training (hidden by default in the dashboard)
+#
+# Models from before MLflow (V1 to v8) exist only as GitHub releases. Releases v9 to v11
+# match MLflow runs by date, checkpoint size and validation score.
+
+models:
+  - id: V1
+    ref: release:V1
+    size: n
+    date: 2026-05-17
+    pipeline: plate + face, first release
+    notes: checkpoint from epoch 5, not a finished training
+    partial: true
+  - id: V2
+    ref: release:V2
+    size: n
+    date: 2026-05-18
+    pipeline: plate + face
+  - id: V3
+    ref: release:V3
+    size: n
+    date: 2026-05-20
+    pipeline: plate + face, 200 epochs
+  - id: V4
+    ref: release:V4
+    size: s
+    date: 2026-05-21
+    pipeline: plate + face, 200 epochs
+  - id: v5
+    ref: release:v5
+    size: m
+    date: 2026-05-22
+    pipeline: plate + face, 200 epochs
+    notes: checkpoint from epoch 19, not a finished training
+    partial: true
+  - id: v6
+    ref: release:v6
+    size: s
+    date: 2026-05-26
+    pipeline: 4 classes, real labels only
+  - id: v7
+    ref: release:v7
+    size: n
+    date: 2026-05-27
+    pipeline: 4 classes, real labels only
+  - id: v8
+    ref: release:v8
+    size: m
+    date: 2026-06-01
+    pipeline: 4 classes, real labels only
+  - id: v9
+    ref: release:v9
+    run_id: dccfb4e10cd24733b4012dd175dc757e
+    size: s
+    date: 2026-06-22
+    pipeline: 4 classes, real labels only
+  - id: v10
+    ref: release:v10
+    run_id: 0d28cb9deda7474fb28de9e055dcff07
+    size: s
+    date: 2026-07-08
+    pipeline: pseudo-labels (first pipeline)
+    notes: pseudo-labels also in val/test
+  - id: run-2026-07-30
+    ref: runs:/0d513a9b68e04c8688280addf76f2ab9
+    size: s
+    date: 2026-07-30
+    pipeline: pseudo-labels
+    notes: never released; pseudo-labels also in val/test
+  - id: run-2026-08-11
+    ref: runs:/53e66bbe33cd4d92901cf9c842eac94e
+    size: s
+    date: 2026-08-11
+    pipeline: pseudo-labels from a yolo26s pretrain
+    notes: never released; pseudo-labels also in val/test
+  - id: run-2026-08-16
+    ref: runs:/d8b5c24fe60d461995d7a2e5183e115b
+    size: s
+    date: 2026-08-16
+    pipeline: pseudo-labels + synthetic plates (also in val)
+    notes: never released; pseudo-labels also in val/test
+  - id: v11
+    ref: license-plate-detector/1
+    size: s
+    date: 2026-11-18
+    pipeline: yolo26l pretrain + teachers, pseudo-labels, synthetic plates in train
+    notes: same file as GitHub release v11; pseudo-labels also in val/test
+  - id: no-pseudo-partial
+    ref: angelicam/phase1-baseline/yolov26_license_plate/weights/best.pt
+    run_id: fb91413ddde149689e4084617ec36ec3
+    size: s
+    date: 2026-11-19
+    pipeline: synthetic plates in train, no pseudo-labels
+    notes: accidental (teachers proposed no labels); stopped at epoch 38 of 100 by a shutdown
+    partial: true
+  - id: phase1-r2
+    ref: license-plate-detector/2
+    size: s
+    date: 2026-11-21
+    pipeline: phase 1 fixes - pseudo-labels in train only, shared vehicle teacher
+    notes: early-stopped at epoch 38, best epoch 18
