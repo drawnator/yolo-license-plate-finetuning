@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YOLO Model Comparison</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --hover: rgba(11,11,11,0.04);
+  --size-n: #2a78d6;
+  --size-s: #eb6834;
+  --size-m: #1baf7a;
+  --size-other: #898781;
+  --good-text: #006300;
+  --bad-text: #d03b3b;
+  --mid: #f0efec;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --hover: rgba(255,255,255,0.05);
+    --size-n: #3987e5;
+    --size-s: #d95926;
+    --size-m: #199e70;
+    --good-text: #0ca30c;
+    --bad-text: #e66767;
+    --mid: #383835;
+    --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255,255,255,0.10);
+  --hover: rgba(255,255,255,0.05);
+  --size-n: #3987e5;
+  --size-s: #d95926;
+  --size-m: #199e70;
+  --good-text: #0ca30c;
+  --bad-text: #e66767;
+  --mid: #383835;
+  --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 2px; font-weight: 620; }
+.sub { color: var(--text-secondary); margin: 0; max-width: 820px; }
+.muted { color: var(--text-muted); }
+.small { font-size: 12px; }
+header { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start;
+         flex-wrap: wrap; margin-bottom: 18px; }
+.source { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, select {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer;
+}
+button:hover, select:hover { background: var(--hover); }
+button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.controls {
+  position: sticky; top: 0; z-index: 5; background: var(--page);
+  display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+}
+.group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.group > .label { color: var(--text-secondary); font-size: 12px; margin-right: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 5px 10px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--hover); box-shadow: inset 0 -2px 0 var(--accent); }
+label.check { display: inline-flex; gap: 5px; align-items: center; cursor: pointer;
+              padding: 3px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+         margin-bottom: 18px; }
+.tile, .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+.tile { padding: 14px 16px; }
+.tile .k { color: var(--text-secondary); font-size: 12px; }
+.tile .v { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; margin: 2px 0; }
+.tile .d { color: var(--text-secondary); font-size: 12px; }
+.card { padding: 16px; margin-bottom: 18px; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+             align-items: flex-start; margin-bottom: 10px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--text-secondary); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+svg { display: block; overflow: visible; }
+svg text { fill: var(--text-secondary); font-size: 12px; }
+svg .val { fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+svg .muted { fill: var(--text-muted); }
+svg .halo { paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+.hit { fill: transparent; cursor: default; }
+.hit:hover { fill: var(--hover); }
+#tooltip {
+  position: fixed; pointer-events: none; z-index: 20; display: none; max-width: 320px;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px; font-size: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+}
+#tooltip b { font-weight: 620; }
+#tooltip .row { display: flex; justify-content: space-between; gap: 14px; }
+#tooltip .row span:last-child { font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { color: var(--text-secondary); font-weight: 560; font-size: 12px; cursor: pointer; user-select: none;
+     position: sticky; top: 0; background: var(--surface-1); }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+td.wrap { white-space: normal; min-width: 220px; text-align: left; color: var(--text-secondary); }
+tr:hover td { background: var(--hover); }
+.up { color: var(--good-text); }
+.down { color: var(--bad-text); }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 6px;
+         border: 1px solid var(--border); color: var(--text-secondary); margin-left: 4px; }
+a { color: var(--accent); }
+.empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); }
+.note { color: var(--text-secondary); font-size: 12px; margin-top: 8px; }
+details summary { cursor: pointer; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>YOLO model comparison</h1>
+      <p class="sub">Benchmark <span id="bench-version">v1</span>: the test split of each dataset, human
+        labels only. Each dataset is scored on the classes it annotates, and the overall score is the
+        mean over datasets. <span id="digest" class="muted"></span></p>
+    </div>
+    <div class="source">
+      <span id="source" class="muted small"></span>
+      <button id="load-btn" type="button">Load CSV</button>
+      <input id="file" type="file" accept=".csv,text/csv" hidden>
+      <button id="theme-btn" type="button" title="Switch light / dark">Theme</button>
+    </div>
+  </header>
+
+  <div class="controls" role="toolbar" aria-label="Filters">
+    <div class="group"><span class="label">Metric</span>
+      <div class="seg" id="metric-seg"></div></div>
+    <div class="group"><span class="label">Classes</span>
+      <span id="class-checks" class="group"></span>
+      <button type="button" data-preset="all">All</button>
+      <button type="button" data-preset="plate face">Plate + face</button></div>
+    <div class="group"><span class="label">Baseline</span><select id="baseline"></select></div>
+    <div class="group"><label class="check"><input type="checkbox" id="show-partial">
+      Show unfinished trainings</label></div>
+  </div>
+
+  <div id="app"><div class="empty">Loading results…</div></div>
+
+  <div class="card">
+    <details>
+      <summary>How the numbers are computed</summary>
+      <ul class="small" style="color:var(--text-secondary)">
+        <li>Scores come from <code>python -m evaluation.benchmark</code> (same images and settings for every
+          model: <code>imgsz=640</code>, Ultralytics validation defaults). Training-time validation scores are
+          shown in the table only for reference; they used different data and are not comparable.</li>
+        <li>For the selected classes, each dataset's score is the mean over the selected classes it
+          annotates; the overall score is the mean over datasets. With all classes selected this equals
+          the benchmark's <code>overall/…</code> value.</li>
+        <li>A model is only ranked when it can detect every selected class. Plate + face models
+          (V1 to v5) appear when the selection is limited to plate and face.</li>
+        <li>Speed is the inference time per image on the GPU that ran the benchmark (RTX 4060 Ti),
+          weighted by dataset size.</li>
+      </ul>
+    </details>
+  </div>
+</main>
+<div id="tooltip" role="tooltip"></div>
+
+<script>
+"use strict";
+const METRICS = ["mAP50-95", "mAP50", "precision", "recall"];
+const METRIC_LABEL = { "mAP50-95": "mAP50-95", "mAP50": "mAP50", "precision": "Precision", "recall": "Recall" };
+const SIZE_LABEL = { n: "nano", s: "small", m: "medium", l: "large" };
+const STORE = "yolo-dashboard-v1";
+
+const state = { metric: "mAP50-95", classes: null, baseline: "", showPartial: false, heat: "values",
+                sortKey: "score", sortDir: -1 };
+let DATA = null;  // { rows, datasets, classes, annotated }
+
+/* ---------- persistence (per-viewer convenience only) ---------- */
+function loadPrefs() {
+  try { Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* ignore */ }
+  if (state.classes && !Array.isArray(state.classes)) state.classes = null;
+}
+function savePrefs() {
+  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+
+/* ---------- CSV ---------- */
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ""; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = "";
+      if (row.length > 1 || row[0] !== "") rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  const header = rows.shift() || [];
+  return rows.map(r => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
+}
+
+function prepare(records) {
+  const datasets = []; const classes = []; const annotated = {};
+  const rows = records.map(rec => {
+    const ds = {};
+    for (const [k, v] of Object.entries(rec)) {
+      if (!k.startsWith("dsclass/") || v === "") continue;
+      const [, d, c, m] = k.split("/");
+      if (!datasets.includes(d)) datasets.push(d);
+      if (!classes.includes(c)) classes.push(c);
+      (annotated[d] ||= new Set()).add(c);
+      ((ds[d] ||= {})[c] ||= {})[m] = parseFloat(v);
+    }
+    const num = k => (rec[k] === "" || rec[k] == null) ? null : parseFloat(rec[k]);
+    return {
+      id: rec.id, ref: rec.ref, size: rec.size || "", date: rec.date || "", pipeline: rec.pipeline || "",
+      notes: rec.notes || "", partial: rec.partial === "true", aliases: (rec.aliases || "").split(" ").filter(Boolean),
+      registry: rec.registry_version || "", mlflow: rec.mlflow_url || "", release: rec.release_url || "",
+      trainScore: num("train_val_mAP50-95"), speed: num("speed/inference_ms"),
+      known: new Set((rec.classes || "").split(" ").filter(Boolean)), ds,
+    };
+  });
+  const order = ["plate", "face", "car", "motorcycle"];
+  classes.sort((a, b) => (order.indexOf(a) + 99 * (order.indexOf(a) < 0)) - (order.indexOf(b) + 99 * (order.indexOf(b) < 0)));
+  datasets.sort();
+  return { rows, datasets, classes, annotated };
+}
+
+/* ---------- scoring ---------- */
+const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+function dsScore(row, d, metric, classes) {
+  const vals = classes.filter(c => DATA.annotated[d].has(c)).map(c => row.ds[d]?.[c]?.[metric])
+    .filter(v => v != null && !Number.isNaN(v));
+  return mean(vals);
+}
+function classScore(row, c, metric) {
+  return mean(DATA.datasets.map(d => row.ds[d]?.[c]?.[metric]).filter(v => v != null));
+}
+function missing(row, classes) { return classes.filter(c => !row.known.has(c)); }
+function score(row, metric = state.metric, classes = state.classes) {
+  if (missing(row, classes).length) return null;
+  return mean(DATA.datasets.map(d => dsScore(row, d, metric, classes)).filter(v => v != null));
+}
+const fmt = v => v == null ? "–" : v.toFixed(3);
+const fmtD = v => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(3);
+const sizeColor = s => `var(--size-${SIZE_LABEL[s] ? s : "other"})`;
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById("tooltip");
+function showTip(ev, html) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - pad;
+  if (y + h > innerHeight - 8) y = ev.clientY - h - pad;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function bindTip(el, html) {
+  el.addEventListener("mousemove", ev => showTip(ev, typeof html === "function" ? html() : html));
+  el.addEventListener("mouseleave", hideTip);
+}
+function modelTip(row, extra = "") {
+  const s = score(row); const b = baseRow();
+  const lines = [
+    `<b>${esc(row.id)}</b>${row.aliases.map(a => ` <span class="badge">@${esc(a)}</span>`).join("")}`,
+    `<div class="muted">${esc(SIZE_LABEL[row.size] || row.size || "?")} · ${esc(row.date)}</div>`,
+    `<div style="margin:4px 0">${esc(row.pipeline)}</div>`,
+    `<div class="row"><span>${METRIC_LABEL[state.metric]} (selection)</span><span>${fmt(s)}</span></div>`,
+  ];
+  if (b && b !== row && s != null && score(b) != null)
+    lines.push(`<div class="row"><span>vs ${esc(b.id)}</span><span>${fmtD(s - score(b))}</span></div>`);
+  if (row.speed != null) lines.push(`<div class="row"><span>Inference</span><span>${row.speed.toFixed(2)} ms</span></div>`);
+  if (extra) lines.push(extra);
+  if (row.notes) lines.push(`<div class="muted" style="margin-top:4px">${esc(row.notes)}</div>`);
+  return lines.join("");
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------- svg helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function txt(parent, x, y, s, attrs = {}) { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; }
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo || 1; const step0 = span / n; const mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function roundedBar(parent, x, y, w, h, r, fill) {
+  // Rounded on the data end only (right side), square on the baseline.
+  r = Math.min(r, w, h / 2);
+  const d = `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`;
+  return el("path", { d, fill }, parent);
+}
+
+/* ---------- views ---------- */
+function visibleRows() { return DATA.rows.filter(r => state.showPartial || !r.partial); }
+function baseRow() { return DATA.rows.find(r => r.id === state.baseline) || null; }
+
+function render() {
+  savePrefs();
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+  if (!DATA || !DATA.rows.length) { app.innerHTML = `<div class="empty">No results loaded.</div>`; return; }
+  syncControls();
+  const rows = visibleRows();
+  const scored = rows.filter(r => score(r) != null).sort((a, b) => score(b) - score(a));
+  const unscored = rows.filter(r => score(r) == null);
+  app.append(tiles(scored), rankedCard(scored, unscored), heatCard(scored), scatterCards(scored), tableCard(rows));
+}
+
+function tiles(scored) {
+  const wrap = document.createElement("div"); wrap.className = "tiles";
+  const b = baseRow(); const bs = b ? score(b) : null;
+  const best = scored[0];
+  const latest = [...scored].sort((x, y) => (y.date > x.date) - (y.date < x.date))[0];
+  const items = [
+    ["Best on this selection", best ? fmt(score(best)) : "–", best ? `${best.id} · ${SIZE_LABEL[best.size] || best.size}` : ""],
+    ["Baseline", bs != null ? fmt(bs) : "–", b ? `${b.id}${b.aliases.length ? " · @" + b.aliases.join(" @") : ""}` +
+      (bs == null && b ? " · not scored on these classes" : "") : "none selected"],
+    ["Newest model", latest ? fmt(score(latest)) : "–", latest ? `${latest.id} · ${latest.date}` +
+      (bs != null && latest !== b ? ` · ${fmtD(score(latest) - bs)} vs baseline` : "") : ""],
+  ];
+  for (const [k, v, d] of items) {
+    const t = document.createElement("div"); t.className = "tile";
+    t.innerHTML = `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div>`;
+    wrap.appendChild(t);
+  }
+  return wrap;
+}
+
+function sizeLegend(rows) {
+  const sizes = [...new Set(rows.map(r => r.size))].sort((a, b) => "nsml".indexOf(a) - "nsml".indexOf(b));
+  return `<div class="legend">${sizes.map(s => `<span><i class="sw" style="background:${sizeColor(s)}"></i>${esc(SIZE_LABEL[s] || s || "unknown")}</span>`).join("")}</div>`;
+}
+
+function card(title, sub, right = "") {
+  const c = document.createElement("section"); c.className = "card";
+  c.innerHTML = `<div class="card-head"><div><h2>${esc(title)}</h2><div class="muted small">${sub}</div></div>${right}</div>`;
+  return c;
+}
+
+function rankedCard(scored, unscored) {
+  const c = card(`${METRIC_LABEL[state.metric]} by model`,
+    `Classes: ${esc(state.classes.join(", "))}. Bars start at 0; the dashed line is the baseline.`, sizeLegend(scored));
+  const host = document.createElement("div"); c.appendChild(host);
+  requestAnimationFrame(() => drawRanked(host, scored));
+  if (unscored.length) {
+    const n = document.createElement("div"); n.className = "note";
+    n.textContent = "Not ranked (cannot detect " + [...new Set(unscored.flatMap(r => missing(r, state.classes)))].join(", ") +
+      "): " + unscored.map(r => r.id).join(", ") + ".";
+    c.appendChild(n);
+  }
+  return c;
+}
+function drawRanked(host, scored) {
+  host.innerHTML = "";
+  const W = host.clientWidth; const rowH = 26, top = 8, bottom = 26, left = Math.min(170, W * 0.32), right = 56;
+  const H = top + bottom + rowH * scored.length;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `${METRIC_LABEL[state.metric]} per model, ranked` }, host);
+  const max = Math.max(...scored.map(r => score(r)), 0.001);
+  const xMax = Math.min(1, Math.ceil(max * 10) / 10 + 0.0001);
+  const x = v => left + (W - left - right) * v / xMax;
+  for (const t of niceTicks(0, xMax, 5)) {
+    el("line", { x1: x(t), x2: x(t), y1: top, y2: H - bottom, stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    txt(svg, x(t), H - bottom + 16, t.toFixed(1), { "text-anchor": "middle", class: "muted" });
+  }
+  el("line", { x1: x(0), x2: x(0), y1: top, y2: H - bottom, stroke: "var(--axis)" }, svg);
+  const b = baseRow(); const bs = b ? score(b) : null;
+  const refLayer = el("g", { "pointer-events": "none" }, svg);
+  scored.forEach((r, i) => {
+    const y = top + i * rowH; const s = score(r);
+    const g = el("g", {}, svg);
+    roundedBar(g, x(0), y + 5, Math.max(1, x(s) - x(0)), rowH - 10, 4, sizeColor(r.size));
+    txt(g, left - 8, y + rowH / 2 + 4, r.id + (r.aliases.length ? "  @" + r.aliases.join(" @") : ""),
+      { "text-anchor": "end", class: r === b ? "val" : "" });
+    txt(g, x(s) + 6, y + rowH / 2 + 4, fmt(s), { class: "val halo" });
+    const hit = el("rect", { x: 0, y, width: W, height: rowH, class: "hit" }, g);
+    bindTip(hit, () => modelTip(r));
+  });
+  if (bs != null) {
+    // Drawn above the bars but below the value labels, which carry a surface halo.
+    el("line", { x1: x(bs), x2: x(bs), y1: top - 4, y2: H - bottom, stroke: "var(--text-secondary)",
+      "stroke-width": 1.5, "stroke-dasharray": "4 3" }, refLayer);
+    svg.appendChild(refLayer);
+    svg.querySelectorAll("text.halo").forEach(t => svg.appendChild(t));
+  }
+}
+
+function heatCard(scored) {
+  const toggle = `<div class="seg" id="heat-seg">
+    <button type="button" data-heat="values" aria-pressed="${state.heat === "values"}">Values</button>
+    <button type="button" data-heat="diff" aria-pressed="${state.heat === "diff"}">Difference to baseline</button></div>`;
+  const c = card("Where models differ", `${METRIC_LABEL[state.metric]} per class (mean over the datasets that annotate it) and per dataset (selected classes).`, toggle);
+  const host = document.createElement("div"); host.className = "table-wrap"; c.appendChild(host);
+  c.querySelectorAll("#heat-seg button").forEach(bt => bt.onclick = () => { state.heat = bt.dataset.heat; render(); });
+  const cols = [{ key: "overall", label: "Overall", get: r => score(r) },
+    ...state.classes.map(cl => ({ key: "c:" + cl, label: cl, get: r => r.known.has(cl) ? classScore(r, cl, state.metric) : null })),
+    ...DATA.datasets.filter(d => state.classes.some(cl => DATA.annotated[d].has(cl)))
+      .map(d => ({ key: "d:" + d, label: d, get: r => dsScore(r, d, state.metric, state.classes) }))];
+  const b = baseRow();
+  const diff = state.heat === "diff" && b && score(b) != null;
+  if (state.heat === "diff" && !diff) {
+    const n = document.createElement("div"); n.className = "note";
+    n.textContent = "Pick a baseline that is scored on the selected classes to see differences.";
+    c.appendChild(n);
+  }
+  requestAnimationFrame(() => drawHeat(host, scored, cols, diff ? b : null));
+  const lg = document.createElement("div"); lg.className = "note";
+  lg.textContent = diff ? `Blue: better than ${b.id}; red: worse. Gray: about the same.` :
+    "Darker blue is a higher score within the table.";
+  c.appendChild(lg);
+  return c;
+}
+const BLUES = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
+const REDS = ["#fbdcdb", "#f6bcbb", "#f09a99", "#ea7877", "#e34948", "#c93a39", "#a92f2e"];
+const BLUE_ARM = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+function drawHeat(host, rows, cols, base) {
+  host.innerHTML = "";
+  const W = Math.max(host.clientWidth, 120 + cols.length * 74);
+  const left = 150, top = 30, cellW = (W - left) / cols.length, cellH = 26;
+  const H = top + rows.length * cellH + 2;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Heatmap of scores" }, host);
+  cols.forEach((cl, j) => txt(svg, left + j * cellW + cellW / 2, top - 10, cl.label.length > 12 ? cl.label.slice(0, 11) + "…" : cl.label,
+    { "text-anchor": "middle" }));
+  const all = rows.flatMap(r => cols.map(cl => cl.get(r))).filter(v => v != null);
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const diffs = base ? rows.flatMap(r => cols.map(cl => { const v = cl.get(r), bv = cl.get(base); return v != null && bv != null ? v - bv : null; })).filter(v => v != null) : [];
+  const dMax = Math.max(0.01, ...diffs.map(Math.abs));
+  rows.forEach((r, i) => {
+    const y = top + i * cellH;
+    txt(svg, left - 8, y + cellH / 2 + 4, r.id, { "text-anchor": "end", class: r === base ? "val" : "" });
+    cols.forEach((cl, j) => {
+      const v = cl.get(r); const x = left + j * cellW;
+      let fill = "var(--mid)", label = fmt(v), dark = false;
+      if (v != null && !base) {
+        const t = hi > lo ? (v - lo) / (hi - lo) : 1; const k = Math.round(t * (BLUES.length - 1));
+        fill = BLUES[k]; dark = k >= 7;
+      } else if (v != null && base) {
+        const bv = cl.get(base); const d = bv != null ? v - bv : null; label = fmtD(d);
+        if (d != null && Math.abs(d) >= 0.002) {
+          const arm = d > 0 ? BLUE_ARM : REDS; const k = Math.min(arm.length - 1, Math.round(Math.abs(d) / dMax * (arm.length - 1)));
+          fill = arm[k]; dark = k >= 3;
+        }
+      }
+      const g = el("g", {}, svg);
+      el("rect", { x: x + 1, y: y + 1, width: cellW - 2, height: cellH - 2, rx: 3, fill }, g);
+      const t = txt(g, x + cellW / 2, y + cellH / 2 + 4, v == null ? "–" : label, { "text-anchor": "middle", class: "val" });
+      t.style.fill = v == null ? "var(--text-muted)" : (dark ? "#ffffff" : (fill === "var(--mid)" ? "var(--text-primary)" : "#0b0b0b"));
+      bindTip(g, () => modelTip(r, `<div class="row"><span>${esc(cl.label)}</span><span>${fmt(v)}${base && v != null && cl.get(base) != null ? " (" + fmtD(v - cl.get(base)) + ")" : ""}</span></div>`));
+    });
+  });
+}
+
+function scatterCards(scored) {
+  const wrap = document.createElement("div"); wrap.className = "two";
+  const a = card("Accuracy vs speed", "Inference time per image; up and to the left is better.", sizeLegend(scored));
+  const b = card("Over time", "Training date of each model.", sizeLegend(scored));
+  const ha = document.createElement("div"), hb = document.createElement("div");
+  a.appendChild(ha); b.appendChild(hb); wrap.append(a, b);
+  requestAnimationFrame(() => {
+    drawDots(ha, scored.filter(r => r.speed != null), r => r.speed, v => v.toFixed(1) + " ms", false);
+    drawDots(hb, scored.filter(r => r.date), r => Date.parse(r.date), v => new Date(v).toISOString().slice(0, 7), true);
+  });
+  return wrap;
+}
+function drawDots(host, rows, getX, fmtX, isDate) {
+  host.innerHTML = "";
+  if (!rows.length) { host.innerHTML = `<div class="empty">No data.</div>`; return; }
+  const W = host.clientWidth, H = 300, m = { l: 44, r: 16, t: 12, b: 30 };
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Scatter plot" }, host);
+  const xs = rows.map(getX), ys = rows.map(r => score(r));
+  let x0 = Math.min(...xs), x1 = Math.max(...xs); const px = (x1 - x0) * 0.06 || 1; x0 -= px; x1 += px;
+  if (!isDate) x0 = Math.max(0, x0);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys); const py = (y1 - y0) * 0.12 || 0.02; y0 -= py; y1 += py;
+  const X = v => m.l + (W - m.l - m.r) * (v - x0) / (x1 - x0);
+  const Y = v => H - m.b - (H - m.t - m.b) * (v - y0) / (y1 - y0);
+  for (const t of niceTicks(y0, y1, 5)) {
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t), stroke: "var(--grid)" }, svg);
+    txt(svg, m.l - 6, Y(t) + 4, t.toFixed(2), { "text-anchor": "end", class: "muted" });
+  }
+  const xt = isDate ? monthTicks(x0, x1, Math.max(2, Math.floor((W - 80) / 90))) : niceTicks(x0, x1, Math.max(2, Math.floor((W - 80) / 70)));
+  for (const t of xt) txt(svg, X(t), H - m.b + 18, fmtX(t), { "text-anchor": "middle", class: "muted" });
+  el("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: "var(--axis)" }, svg);
+  const b = baseRow(); const best = rows.reduce((a, r) => score(r) > score(a) ? r : a, rows[0]);
+  const labelled = [...new Set([best, b].filter(Boolean))];
+  const placed = [];
+  rows.forEach(r => {
+    const cx = X(getX(r)), cy = Y(score(r));
+    const g = el("g", {}, svg);
+    el("circle", { cx, cy, r: 5.5, fill: sizeColor(r.size), stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+  });
+  labelled.forEach(r => {
+    // Above-right; if that box is taken by the previous label, below-right instead.
+    const cx = X(getX(r)), cy = Y(score(r));
+    let ly = cy - 8;
+    if (placed.some(p => Math.abs(p.x - cx) < 60 && Math.abs(p.y - ly) < 14)) ly = cy + 18;
+    placed.push({ x: cx, y: ly });
+    txt(svg, cx + 9, ly, r.id, { class: "val halo" });
+  });
+  rows.forEach(r => {
+    const cx = X(getX(r)), cy = Y(score(r));
+    const g = el("g", {}, svg);
+    const hit = el("circle", { cx, cy, r: 13, class: "hit" }, g);
+    bindTip(hit, () => modelTip(r));
+  });
+}
+function monthTicks(a, b, n) {
+  const out = []; const d = new Date(a); d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0);
+  const months = Math.max(1, Math.ceil(((b - a) / 2.63e9) / n));
+  for (d.setUTCMonth(d.getUTCMonth() + 1); d.getTime() <= b; d.setUTCMonth(d.getUTCMonth() + months)) out.push(d.getTime());
+  return out;
+}
+
+function tableCard(rows) {
+  const c = card("All models", "Click a column to sort. Training-time validation is not comparable between models (different data).");
+  const b = baseRow(); const bs = b ? score(b) : null;
+  const cols = [
+    { key: "id", label: "Model", l: true, get: r => r.id, html: r => `${esc(r.id)}${r.aliases.map(a => `<span class="badge">@${esc(a)}</span>`).join("")}${r.partial ? '<span class="badge">unfinished</span>' : ""}` },
+    { key: "size", label: "Size", l: true, get: r => "nsml".indexOf(r.size), html: r => esc(SIZE_LABEL[r.size] || r.size) },
+    { key: "date", label: "Date", l: true, get: r => r.date, html: r => esc(r.date) },
+    { key: "score", label: METRIC_LABEL[state.metric], get: r => score(r), html: r => fmt(score(r)) },
+    { key: "delta", label: "vs baseline", get: r => score(r) != null && bs != null ? score(r) - bs : null,
+      html: r => { const d = score(r) != null && bs != null && r !== b ? score(r) - bs : null;
+        return d == null ? "–" : `<span class="${d > 0.0005 ? "up" : d < -0.0005 ? "down" : ""}">${d > 0.0005 ? "▲" : d < -0.0005 ? "▼" : ""} ${fmtD(d)}</span>`; } },
+    ...DATA.classes.map(cl => ({ key: "c:" + cl, label: cl, get: r => r.known.has(cl) ? classScore(r, cl, state.metric) : null,
+      html: r => fmt(r.known.has(cl) ? classScore(r, cl, state.metric) : null) })),
+    { key: "speed", label: "ms / image", get: r => r.speed, html: r => r.speed == null ? "–" : r.speed.toFixed(2) },
+    { key: "train", label: "train val mAP50-95", get: r => r.trainScore, html: r => `<span class="muted">${fmt(r.trainScore)}</span>` },
+    { key: "pipeline", label: "How it was made", l: true, wrap: true, get: r => r.pipeline,
+      html: r => esc(r.pipeline) + (r.notes ? `<br><span class="muted">${esc(r.notes)}</span>` : "") },
+    { key: "links", label: "Links", l: true, get: r => r.id, html: r => [r.mlflow && `<a href="${esc(r.mlflow)}" target="_blank" rel="noopener">MLflow</a>`,
+      r.release && `<a href="${esc(r.release)}" target="_blank" rel="noopener">release</a>`,
+      r.registry && `<span class="muted">registry v${esc(r.registry)}</span>`].filter(Boolean).join(" · ") || "–" },
+  ];
+  const col = cols.find(x => x.key === state.sortKey) || cols[3];
+  const sorted = [...rows].sort((x, y) => {
+    const a = col.get(x), bb = col.get(y);
+    if (a == null && bb == null) return 0; if (a == null) return 1; if (bb == null) return -1;
+    return (a > bb ? 1 : a < bb ? -1 : 0) * state.sortDir;
+  });
+  const wrap = document.createElement("div"); wrap.className = "table-wrap";
+  wrap.innerHTML = `<table><thead><tr>${cols.map(x => `<th class="${x.l ? "l" : ""}" data-key="${x.key}" aria-sort="${x.key === col.key ? (state.sortDir > 0 ? "ascending" : "descending") : "none"}">${esc(x.label)}${x.key === col.key ? (state.sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead>
+    <tbody>${sorted.map(r => `<tr>${cols.map(x => `<td class="${x.l ? "l" : ""} ${x.wrap ? "wrap" : ""}">${x.html(r)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  wrap.querySelectorAll("th").forEach(th => th.onclick = () => {
+    const k = th.dataset.key; if (k === "links") return;
+    if (state.sortKey === k) state.sortDir *= -1; else { state.sortKey = k; state.sortDir = ["id", "size", "date", "pipeline"].includes(k) ? 1 : -1; }
+    render();
+  });
+  c.appendChild(wrap);
+  return c;
+}
+
+/* ---------- controls ---------- */
+function buildControls() {
+  const seg = document.getElementById("metric-seg"); seg.innerHTML = "";
+  for (const mm of METRICS) {
+    const bt = document.createElement("button"); bt.type = "button"; bt.textContent = METRIC_LABEL[mm]; bt.dataset.metric = mm;
+    bt.onclick = () => { state.metric = mm; render(); }; seg.appendChild(bt);
+  }
+  const checks = document.getElementById("class-checks"); checks.innerHTML = "";
+  for (const cl of DATA.classes) {
+    const lb = document.createElement("label"); lb.className = "check";
+    lb.innerHTML = `<input type="checkbox" value="${esc(cl)}"> ${esc(cl)}`;
+    lb.querySelector("input").onchange = ev => {
+      const set = new Set(state.classes); ev.target.checked ? set.add(cl) : set.delete(cl);
+      if (!set.size) { ev.target.checked = true; return; }
+      state.classes = DATA.classes.filter(x => set.has(x)); render();
+    };
+    checks.appendChild(lb);
+  }
+  document.querySelectorAll("[data-preset]").forEach(bt => bt.onclick = () => {
+    state.classes = bt.dataset.preset === "all" ? [...DATA.classes] : DATA.classes.filter(c => bt.dataset.preset.split(" ").includes(c));
+    render();
+  });
+  const sel = document.getElementById("baseline");
+  sel.innerHTML = `<option value="">none</option>` + DATA.rows.map(r => `<option value="${esc(r.id)}">${esc(r.id)}${r.aliases.length ? " (@" + esc(r.aliases.join(" @")) + ")" : ""}</option>`).join("");
+  sel.onchange = () => { state.baseline = sel.value; render(); };
+  document.getElementById("show-partial").onchange = ev => { state.showPartial = ev.target.checked; render(); };
+}
+function syncControls() {
+  document.querySelectorAll("#metric-seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.metric === state.metric));
+  document.querySelectorAll("#class-checks input").forEach(i => i.checked = state.classes.includes(i.value));
+  document.getElementById("baseline").value = state.baseline;
+  document.getElementById("show-partial").checked = state.showPartial;
+}
+
+function useData(text, source) {
+  const records = parseCSV(text);
+  DATA = prepare(records);
+  if (!state.classes || !state.classes.every(c => DATA.classes.includes(c))) state.classes = [...DATA.classes];
+  if (!DATA.rows.some(r => r.id === state.baseline)) {
+    const champ = DATA.rows.find(r => r.aliases.includes("champion"));
+    state.baseline = champ ? champ.id : "";
+  }
+  document.getElementById("source").textContent = `${DATA.rows.length} models · ${source}`;
+  buildControls(); render();
+}
+
+/* ---------- boot ---------- */
+loadPrefs();
+document.getElementById("load-btn").onclick = () => document.getElementById("file").click();
+document.getElementById("file").onchange = ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  f.text().then(t => useData(t, f.name));
+};
+document.getElementById("theme-btn").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+};
+let resizeTimer; addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => DATA && render(), 150); });
+fetch("results.csv", { cache: "no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+  .then(t => useData(t, "results.csv"))
+  .catch(() => { document.getElementById("app").innerHTML = `<div class="empty">No results.csv next to this page.
+    Start <code>python -m evaluation.dashboard</code>, or use “Load CSV”.</div>`; });
+</script>
+</body>
+</html>
