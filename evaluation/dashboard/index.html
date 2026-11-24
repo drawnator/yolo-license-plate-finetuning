@@ -171,6 +171,9 @@ details summary { cursor: pointer; color: var(--text-secondary); }
       <span id="class-checks" class="group"></span>
       <button type="button" data-preset="all">All</button>
       <button type="button" data-preset="plate face">Plate + face</button></div>
+    <div class="group"><span class="label">Datasets</span>
+      <span id="ds-checks" class="group"></span>
+      <button type="button" data-dspreset="all">All</button></div>
     <div class="group"><span class="label">Baseline</span><select id="baseline"></select></div>
     <div class="group"><label class="check"><input type="checkbox" id="show-partial">
       Show unfinished trainings</label></div>
@@ -186,7 +189,7 @@ details summary { cursor: pointer; color: var(--text-secondary); }
           model: <code>imgsz=640</code>, Ultralytics validation defaults). Training-time validation scores are
           shown in the table only for reference; they used different data and are not comparable.</li>
         <li>For the selected classes, each dataset's score is the mean over the selected classes it
-          annotates; the overall score is the mean over datasets. With all classes selected this equals
+          annotates; the overall score is the mean over the selected datasets. With all classes selected this equals
           the benchmark's <code>overall/…</code> value.</li>
         <li>A model is only ranked when it can detect every selected class. Plate + face models
           (V1 to v5) appear when the selection is limited to plate and face.</li>
@@ -205,7 +208,8 @@ const METRIC_LABEL = { "mAP50-95": "mAP50-95", "mAP50": "mAP50", "precision": "P
 const SIZE_LABEL = { n: "nano", s: "small", m: "medium", l: "large" };
 const STORE = "yolo-dashboard-v1";
 
-const state = { metric: "mAP50-95", classes: null, baseline: "", showPartial: false, heat: "values",
+const state = { metric: "mAP50-95", classes: null, datasets: null, baseline: "", showPartial: false, heat: "values",
+                xAxis: "class:plate", yAxis: "class:face",
                 sortKey: "score", sortDir: -1 };
 let DATA = null;  // { rows, datasets, classes, annotated }
 
@@ -213,6 +217,7 @@ let DATA = null;  // { rows, datasets, classes, annotated }
 function loadPrefs() {
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* ignore */ }
   if (state.classes && !Array.isArray(state.classes)) state.classes = null;
+  if (state.datasets && !Array.isArray(state.datasets)) state.datasets = null;
 }
 function savePrefs() {
   try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* ignore */ }
@@ -275,14 +280,46 @@ function dsScore(row, d, metric, classes) {
     .filter(v => v != null && !Number.isNaN(v));
   return mean(vals);
 }
+const activeDs = () => DATA.datasets.filter(d => state.datasets.includes(d));
 function classScore(row, c, metric) {
-  return mean(DATA.datasets.map(d => row.ds[d]?.[c]?.[metric]).filter(v => v != null));
+  if (!row.known.has(c)) return null;
+  return mean(activeDs().map(d => row.ds[d]?.[c]?.[metric]).filter(v => v != null));
 }
-function missing(row, classes) { return classes.filter(c => !row.known.has(c)); }
+// A dataset's score on the selected classes, only if the model detects all of them.
+function dsValue(row, d, metric = state.metric, classes = state.classes) {
+  const needed = classes.filter(c => DATA.annotated[d].has(c));
+  if (!needed.length || needed.some(c => !row.known.has(c))) return null;
+  return dsScore(row, d, metric, classes);
+}
+// Selected classes that at least one selected dataset annotates.
+const scoredClasses = (classes = state.classes) => classes.filter(c => activeDs().some(d => DATA.annotated[d].has(c)));
+function missing(row, classes) { return scoredClasses(classes).filter(c => !row.known.has(c)); }
 function score(row, metric = state.metric, classes = state.classes) {
   if (missing(row, classes).length) return null;
-  return mean(DATA.datasets.map(d => dsScore(row, d, metric, classes)).filter(v => v != null));
+  return mean(activeDs().map(d => dsScore(row, d, metric, classes)).filter(v => v != null));
 }
+
+/* ---------- axes for the "compare two scores" chart ---------- */
+function axisOptions() {
+  const opts = [{ key: "overall", label: "Overall (selected classes and datasets)" }];
+  for (const c of DATA.classes) opts.push({ key: "class:" + c, label: `Class: ${c}` });
+  for (const d of DATA.datasets) opts.push({ key: "dataset:" + d, label: `Dataset: ${d} (selected classes)` });
+  for (const d of DATA.datasets) for (const c of DATA.classes)
+    if (DATA.annotated[d].has(c)) opts.push({ key: `dsclass:${d}|${c}`, label: `${d}: ${c}` });
+  return opts;
+}
+function axisValue(row, key) {
+  if (key === "overall") return score(row);
+  const [kind, rest] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  if (kind === "class") return classScore(row, rest, state.metric);
+  if (kind === "dataset") return dsValue(row, rest);
+  if (kind === "dsclass") {
+    const [d, c] = rest.split("|");
+    return row.known.has(c) ? (row.ds[d]?.[c]?.[state.metric] ?? null) : null;
+  }
+  return null;
+}
+const axisLabel = key => (axisOptions().find(o => o.key === key) || { label: key }).label;
 const fmt = v => v == null ? "–" : v.toFixed(3);
 const fmtD = v => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(3);
 const sizeColor = s => `var(--size-${SIZE_LABEL[s] ? s : "other"})`;
@@ -354,7 +391,7 @@ function render() {
   const rows = visibleRows();
   const scored = rows.filter(r => score(r) != null).sort((a, b) => score(b) - score(a));
   const unscored = rows.filter(r => score(r) == null);
-  app.append(tiles(scored), rankedCard(scored, unscored), heatCard(scored), scatterCards(scored), tableCard(rows));
+  app.append(tiles(scored), rankedCard(scored, unscored), heatCard(scored), pairCard(rows), scatterCards(scored), tableCard(rows));
 }
 
 function tiles(scored) {
@@ -390,7 +427,12 @@ function card(title, sub, right = "") {
 
 function rankedCard(scored, unscored) {
   const c = card(`${METRIC_LABEL[state.metric]} by model`,
-    `Classes: ${esc(state.classes.join(", "))}. Bars start at 0; the dashed line is the baseline.`, sizeLegend(scored));
+    `Classes: ${esc(state.classes.join(", "))}. Datasets: ${esc(state.datasets.length === DATA.datasets.length ? "all" : state.datasets.join(", "))}. Bars start at 0; the dashed line is the baseline.`, sizeLegend(scored));
+  if (!scored.length) {
+    const n = document.createElement("div"); n.className = "empty";
+    n.textContent = "No model is scored on this selection: none of the selected datasets annotates the selected classes.";
+    c.appendChild(n); return c;
+  }
   const host = document.createElement("div"); c.appendChild(host);
   requestAnimationFrame(() => drawRanked(host, scored));
   if (unscored.length) {
@@ -444,8 +486,8 @@ function heatCard(scored) {
   const host = document.createElement("div"); host.className = "table-wrap"; c.appendChild(host);
   c.querySelectorAll("#heat-seg button").forEach(bt => bt.onclick = () => { state.heat = bt.dataset.heat; render(); });
   const cols = [{ key: "overall", label: "Overall", get: r => score(r) },
-    ...state.classes.map(cl => ({ key: "c:" + cl, label: cl, get: r => r.known.has(cl) ? classScore(r, cl, state.metric) : null })),
-    ...DATA.datasets.filter(d => state.classes.some(cl => DATA.annotated[d].has(cl)))
+    ...scoredClasses().map(cl => ({ key: "c:" + cl, label: cl, get: r => r.known.has(cl) ? classScore(r, cl, state.metric) : null })),
+    ...activeDs().filter(d => state.classes.some(cl => DATA.annotated[d].has(cl)))
       .map(d => ({ key: "d:" + d, label: d, get: r => dsScore(r, d, state.metric, state.classes) }))];
   const b = baseRow();
   const diff = state.heat === "diff" && b && score(b) != null;
@@ -501,6 +543,38 @@ function drawHeat(host, rows, cols, base) {
   });
 }
 
+function pairCard(rows) {
+  const opts = axisOptions();
+  if (!opts.some(o => o.key === state.xAxis)) state.xAxis = opts[0].key;
+  if (!opts.some(o => o.key === state.yAxis)) state.yAxis = opts[0].key;
+  const select = (id, value) => `<select id="${id}">${opts.map(o => `<option value="${esc(o.key)}"${o.key === value ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+  const right = `<div class="group"><span class="label">Across</span>${select("x-axis", state.xAxis)}
+    <span class="label">Up</span>${select("y-axis", state.yAxis)}
+    <button type="button" id="swap-axes" title="Swap the axes">Swap</button></div>`;
+  const c = card("Compare two scores",
+    `${METRIC_LABEL[state.metric]} of each model on two things at once. Above the dashed line: better on the vertical one.`, right);
+  const pts = rows.filter(r => axisValue(r, state.xAxis) != null && axisValue(r, state.yAxis) != null);
+  const host = document.createElement("div"); c.appendChild(host);
+  const lg = document.createElement("div"); lg.style.marginTop = "6px"; lg.innerHTML = sizeLegend(pts); c.appendChild(lg);
+  const left = rows.length - pts.length;
+  if (left) {
+    const n = document.createElement("div"); n.className = "note";
+    n.textContent = `${left} model${left > 1 ? "s" : ""} not shown (no score on one of the axes): ` +
+      rows.filter(r => !pts.includes(r)).map(r => r.id).join(", ") + ".";
+    c.appendChild(n);
+  }
+  c.querySelector("#x-axis").onchange = ev => { state.xAxis = ev.target.value; render(); };
+  c.querySelector("#y-axis").onchange = ev => { state.yAxis = ev.target.value; render(); };
+  c.querySelector("#swap-axes").onclick = () => { [state.xAxis, state.yAxis] = [state.yAxis, state.xAxis]; render(); };
+  requestAnimationFrame(() => drawDots(host, pts, r => axisValue(r, state.xAxis), v => v.toFixed(2), false, {
+    getY: r => axisValue(r, state.yAxis), diagonal: true, height: 380, labelAll: true, aria: `${axisLabel(state.yAxis)} against ${axisLabel(state.xAxis)}`,
+    xTitle: axisLabel(state.xAxis) + " →", yTitle: "↑ " + axisLabel(state.yAxis),
+    tipExtra: r => `<div class="row"><span>${esc(axisLabel(state.xAxis))}</span><span>${fmt(axisValue(r, state.xAxis))}</span></div>` +
+      `<div class="row"><span>${esc(axisLabel(state.yAxis))}</span><span>${fmt(axisValue(r, state.yAxis))}</span></div>`,
+  }));
+  return c;
+}
+
 function scatterCards(scored) {
   const wrap = document.createElement("div"); wrap.className = "two";
   const a = card("Accuracy vs speed", "Inference time per image; up and to the left is better.", sizeLegend(scored));
@@ -513,15 +587,20 @@ function scatterCards(scored) {
   });
   return wrap;
 }
-function drawDots(host, rows, getX, fmtX, isDate) {
+function drawDots(host, rows, getX, fmtX, isDate, opt = {}) {
   host.innerHTML = "";
-  if (!rows.length) { host.innerHTML = `<div class="empty">No data.</div>`; return; }
-  const W = host.clientWidth, H = 300, m = { l: 44, r: 16, t: 12, b: 30 };
-  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Scatter plot" }, host);
-  const xs = rows.map(getX), ys = rows.map(r => score(r));
-  let x0 = Math.min(...xs), x1 = Math.max(...xs); const px = (x1 - x0) * 0.06 || 1; x0 -= px; x1 += px;
+  if (!rows.length) { host.innerHTML = `<div class="empty">No model has both values.</div>`; return; }
+  const getY = opt.getY || (r => score(r));
+  const W = host.clientWidth, H = opt.height || 300, m = { l: 44, r: 16, t: opt.yTitle ? 30 : 12, b: opt.xTitle ? 46 : 30 };
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opt.aria || "Scatter plot" }, host);
+  const xs = rows.map(getX), ys = rows.map(getY);
+  let x0 = Math.min(...xs), x1 = Math.max(...xs); const px = (x1 - x0) * 0.06 || (opt.diagonal ? 0.02 : 1); x0 -= px; x1 += px;
   if (!isDate) x0 = Math.max(0, x0);
   let y0 = Math.min(...ys), y1 = Math.max(...ys); const py = (y1 - y0) * 0.12 || 0.02; y0 -= py; y1 += py;
+  if (opt.diagonal) {
+    // Same scale on both axes, so the diagonal means "equal score".
+    x0 = y0 = Math.max(0, Math.min(x0, y0)); x1 = y1 = Math.min(1, Math.max(x1, y1));
+  }
   const X = v => m.l + (W - m.l - m.r) * (v - x0) / (x1 - x0);
   const Y = v => H - m.b - (H - m.t - m.b) * (v - y0) / (y1 - y0);
   for (const t of niceTicks(y0, y1, 5)) {
@@ -531,27 +610,45 @@ function drawDots(host, rows, getX, fmtX, isDate) {
   const xt = isDate ? monthTicks(x0, x1, Math.max(2, Math.floor((W - 80) / 90))) : niceTicks(x0, x1, Math.max(2, Math.floor((W - 80) / 70)));
   for (const t of xt) txt(svg, X(t), H - m.b + 18, fmtX(t), { "text-anchor": "middle", class: "muted" });
   el("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: "var(--axis)" }, svg);
-  const b = baseRow(); const best = rows.reduce((a, r) => score(r) > score(a) ? r : a, rows[0]);
-  const labelled = [...new Set([best, b].filter(Boolean))];
+  if (opt.xTitle) txt(svg, (m.l + W - m.r) / 2, H - 8, opt.xTitle, { "text-anchor": "middle" });
+  if (opt.yTitle) txt(svg, m.l - 36, 12, opt.yTitle);
+  if (opt.diagonal) {
+    el("line", { x1: X(x0), y1: Y(x0), x2: X(x1), y2: Y(x1), stroke: "var(--text-muted)", "stroke-width": 1.5,
+      "stroke-dasharray": "4 3" }, svg);
+  }
+  const b = baseRow();
+  const best = rows.reduce((a, r) => getY(r) > getY(a) ? r : a, rows[0]);
+  const bestX = rows.reduce((a, r) => getX(r) > getX(a) ? r : a, rows[0]);
+  const priority = [...new Set([best, opt.diagonal ? bestX : null, b && rows.includes(b) ? b : null].filter(Boolean))];
+  // labelAll: every point gets a label where one fits, important ones first.
+  const labelled = opt.labelAll ? [...priority, ...rows.filter(r => !priority.includes(r))] : priority;
   const placed = [];
   rows.forEach(r => {
-    const cx = X(getX(r)), cy = Y(score(r));
+    const cx = X(getX(r)), cy = Y(getY(r));
     const g = el("g", {}, svg);
     el("circle", { cx, cy, r: 5.5, fill: sizeColor(r.size), stroke: "var(--surface-1)", "stroke-width": 2 }, g);
   });
-  labelled.forEach(r => {
-    // Above-right; if that box is taken by the previous label, below-right instead.
-    const cx = X(getX(r)), cy = Y(score(r));
-    let ly = cy - 8;
-    if (placed.some(p => Math.abs(p.x - cx) < 60 && Math.abs(p.y - ly) < 14)) ly = cy + 18;
-    placed.push({ x: cx, y: ly });
-    txt(svg, cx + 9, ly, r.id, { class: "val halo" });
+  const dots = rows.map(r => ({ x: X(getX(r)), y: Y(getY(r)) }));
+  const overlaps = (a, q) => a.x0 < q.x1 && q.x0 < a.x1 && a.y0 < q.y1 && q.y0 < a.y1;
+  labelled.forEach((r, i) => {
+    // Try right-above, right-below, left-above, left-below; skip if none is free.
+    const cx = X(getX(r)), cy = Y(getY(r)); const w = r.id.length * 7 + 4, h = 14;
+    const spots = [[cx + 8, cy - 6 - h], [cx + 8, cy + 6], [cx - 8 - w, cy - 6 - h], [cx - 8 - w, cy + 6]];
+    for (const [x, y] of spots) {
+      const box = { x0: x, x1: x + w, y0: y, y1: y + h };
+      if (box.x0 < m.l || box.x1 > W - m.r + 12 || box.y0 < m.t - 4 || box.y1 > H - m.b) continue;
+      if (placed.some(q => overlaps(box, q))) continue;
+      if (dots.some(d => d.x > box.x0 - 5 && d.x < box.x1 + 5 && d.y > box.y0 - 5 && d.y < box.y1 + 5)) continue;
+      placed.push(box);
+      txt(svg, x + 2, y + h - 3, r.id, { class: i < priority.length ? "val halo" : "halo" });
+      break;
+    }
   });
   rows.forEach(r => {
-    const cx = X(getX(r)), cy = Y(score(r));
+    const cx = X(getX(r)), cy = Y(getY(r));
     const g = el("g", {}, svg);
     const hit = el("circle", { cx, cy, r: 13, class: "hit" }, g);
-    bindTip(hit, () => modelTip(r));
+    bindTip(hit, () => modelTip(r, opt.tipExtra ? opt.tipExtra(r) : ""));
   });
 }
 function monthTicks(a, b, n) {
@@ -572,8 +669,10 @@ function tableCard(rows) {
     { key: "delta", label: "vs baseline", get: r => score(r) != null && bs != null ? score(r) - bs : null,
       html: r => { const d = score(r) != null && bs != null && r !== b ? score(r) - bs : null;
         return d == null ? "–" : `<span class="${d > 0.0005 ? "up" : d < -0.0005 ? "down" : ""}">${d > 0.0005 ? "▲" : d < -0.0005 ? "▼" : ""} ${fmtD(d)}</span>`; } },
-    ...DATA.classes.map(cl => ({ key: "c:" + cl, label: cl, get: r => r.known.has(cl) ? classScore(r, cl, state.metric) : null,
-      html: r => fmt(r.known.has(cl) ? classScore(r, cl, state.metric) : null) })),
+    ...DATA.classes.map(cl => ({ key: "c:" + cl, label: cl, get: r => classScore(r, cl, state.metric),
+      html: r => fmt(classScore(r, cl, state.metric)) })),
+    ...activeDs().filter(d => state.classes.some(cl => DATA.annotated[d].has(cl))).map(d => ({
+      key: "d:" + d, label: d, title: `${d}, selected classes`, get: r => dsValue(r, d), html: r => fmt(dsValue(r, d)) })),
     { key: "speed", label: "ms / image", get: r => r.speed, html: r => r.speed == null ? "–" : r.speed.toFixed(2) },
     { key: "train", label: "train val mAP50-95", get: r => r.trainScore, html: r => `<span class="muted">${fmt(r.trainScore)}</span>` },
     { key: "pipeline", label: "How it was made", l: true, wrap: true, get: r => r.pipeline,
@@ -589,7 +688,7 @@ function tableCard(rows) {
     return (a > bb ? 1 : a < bb ? -1 : 0) * state.sortDir;
   });
   const wrap = document.createElement("div"); wrap.className = "table-wrap";
-  wrap.innerHTML = `<table><thead><tr>${cols.map(x => `<th class="${x.l ? "l" : ""}" data-key="${x.key}" aria-sort="${x.key === col.key ? (state.sortDir > 0 ? "ascending" : "descending") : "none"}">${esc(x.label)}${x.key === col.key ? (state.sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead>
+  wrap.innerHTML = `<table><thead><tr>${cols.map(x => `<th class="${x.l ? "l" : ""}" data-key="${x.key}"${x.title ? ` title="${esc(x.title)}"` : ""} aria-sort="${x.key === col.key ? (state.sortDir > 0 ? "ascending" : "descending") : "none"}">${esc(x.label)}${x.key === col.key ? (state.sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead>
     <tbody>${sorted.map(r => `<tr>${cols.map(x => `<td class="${x.l ? "l" : ""} ${x.wrap ? "wrap" : ""}">${x.html(r)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   wrap.querySelectorAll("th").forEach(th => th.onclick = () => {
     const k = th.dataset.key; if (k === "links") return;
@@ -618,6 +717,18 @@ function buildControls() {
     };
     checks.appendChild(lb);
   }
+  const dsChecks = document.getElementById("ds-checks"); dsChecks.innerHTML = "";
+  for (const d of DATA.datasets) {
+    const lb = document.createElement("label"); lb.className = "check";
+    lb.innerHTML = `<input type="checkbox" value="${esc(d)}"> ${esc(d)}`;
+    lb.querySelector("input").onchange = ev => {
+      const set = new Set(state.datasets); ev.target.checked ? set.add(d) : set.delete(d);
+      if (!set.size) { ev.target.checked = true; return; }
+      state.datasets = DATA.datasets.filter(x => set.has(x)); render();
+    };
+    dsChecks.appendChild(lb);
+  }
+  document.querySelector("[data-dspreset]").onclick = () => { state.datasets = [...DATA.datasets]; render(); };
   document.querySelectorAll("[data-preset]").forEach(bt => bt.onclick = () => {
     state.classes = bt.dataset.preset === "all" ? [...DATA.classes] : DATA.classes.filter(c => bt.dataset.preset.split(" ").includes(c));
     render();
@@ -631,6 +742,7 @@ function syncControls() {
   document.querySelectorAll("#metric-seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.metric === state.metric));
   document.querySelectorAll("#class-checks input").forEach(i => i.checked = state.classes.includes(i.value));
   document.getElementById("baseline").value = state.baseline;
+  document.querySelectorAll("#ds-checks input").forEach(i => i.checked = state.datasets.includes(i.value));
   document.getElementById("show-partial").checked = state.showPartial;
 }
 
@@ -638,6 +750,8 @@ function useData(text, source) {
   const records = parseCSV(text);
   DATA = prepare(records);
   if (!state.classes || !state.classes.every(c => DATA.classes.includes(c))) state.classes = [...DATA.classes];
+  if (!state.datasets || !state.datasets.length || !state.datasets.every(d => DATA.datasets.includes(d)))
+    state.datasets = [...DATA.datasets];
   if (!DATA.rows.some(r => r.id === state.baseline)) {
     const champ = DATA.rows.find(r => r.aliases.includes("champion"));
     state.baseline = champ ? champ.id : "";
