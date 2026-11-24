@@ -3,6 +3,7 @@
 Accepted references:
 
 ``path/to/best.pt``                       a local file
+``release:<tag>``                         the ``.pt`` asset of a GitHub release of this repo
 ``runs:/<run_id>``                        ``weights/best.pt`` of that MLflow run
 ``models:/<name>/<version>``              a registered model version
 ``models:/<name>@<alias>``                a registered model alias (``champion``, ...)
@@ -13,8 +14,10 @@ MLflow references need ``MLFLOW_TRACKING_URI`` (and credentials) in the environm
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -32,6 +35,9 @@ def resolve(ref: str, out_dir: str | Path = "models") -> ResolvedModel:
     """Return the local weights for ``ref``, downloading them if needed."""
     if Path(ref).is_file():
         return ResolvedModel(ref=ref, weights=Path(ref))
+    if ref.startswith("release:"):
+        return ResolvedModel(ref=ref, weights=_download_release(ref[len("release:"):],
+                                                                Path(out_dir) / "releases"))
 
     import mlflow
     from mlflow import MlflowClient
@@ -57,6 +63,30 @@ def resolve(ref: str, out_dir: str | Path = "models") -> ResolvedModel:
                          registry=(name, version.version),
                          info={"description": version.description or "",
                                "tags": dict(version.tags or {})})
+
+
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "drawnator/yolo-license-plate-finetuning")
+
+
+def _download_release(tag: str, out_dir: Path) -> Path:
+    """Download the single ``.pt`` asset of release ``tag`` (cached in ``out_dir/<tag>``)."""
+    target = out_dir / tag
+    cached = sorted(target.glob("*.pt")) if target.is_dir() else []
+    if cached:
+        return cached[0]
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag}"
+    request = urllib.request.Request(url, headers={"User-Agent": "model-store",
+                                                   "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        assets = [a for a in json.load(response)["assets"] if a["name"].endswith(".pt")]
+    if len(assets) != 1:
+        raise ValueError(f"release {tag!r} has {len(assets)} .pt assets, expected 1")
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / assets[0]["name"]
+    partial = path.with_suffix(".part")
+    urllib.request.urlretrieve(assets[0]["browser_download_url"], partial)
+    partial.rename(path)
+    return path
 
 
 def _download(artifact_uri: str, target: Path) -> Path:

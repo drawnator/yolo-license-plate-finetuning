@@ -1,6 +1,7 @@
 """Fixed benchmark: score models the same way so they can be compared over time.
 
     python -m evaluation.benchmark license-plate-detector@champion runs:/<run_id> path/best.pt
+    python -m evaluation.benchmark --catalog evaluation/models.yaml   # every listed model
 
 Benchmark ``v1``:
 
@@ -11,6 +12,10 @@ Benchmark ``v1``:
   face dataset has no car boxes, RodoSol no faces); scoring every class everywhere would
   count correct detections of unlabelled objects as errors. Each dataset is therefore
   scored on the classes present in its test labels.
+* **Only the classes the model knows.** Older models detect plate and face only; they are
+  scored on those, and their car and motorcycle scores are left empty. The per-dataset,
+  per-class scores (``dsclass/<dataset>/<class>/<metric>``) are stored as well, so models
+  can be compared on any common set of classes (the dashboard does this).
 * **Fixed settings:** ``imgsz=640``, Ultralytics' validation defaults for confidence and
   IoU, the same for every model.
 * **Overall scores** are the mean over datasets (each dataset counts equally, so the
@@ -19,13 +24,15 @@ Benchmark ``v1``:
 
 Results are printed as a table and, when ``MLFLOW_TRACKING_URI`` is set, logged to the
 ``license-plate-benchmark`` experiment and copied as ``bench.v1.*`` tags onto the
-training run and the registered model version. A model already benchmarked with the same
-version and data is not re-evaluated unless ``--force`` is given.
+training run and the registered model version. Results are cached by the SHA-256 of the
+weights file: the same weights with the same benchmark version and data are not
+re-evaluated unless ``--force`` is given.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -82,18 +89,22 @@ def evaluate(weights: Path, sets: list[dict], names: list[str], imgsz: int, batc
     from ultralytics import YOLO
 
     model = YOLO(str(weights))
+    known = model_classes(model, names)
     metrics: dict[str, float] = {}
     per_class = defaultdict(lambda: defaultdict(list))
     overall = defaultdict(list)
     speeds = []
     for ds in sets:
+        classes = [c for c in ds["classes"] if c in known]
+        if not classes:
+            continue
         with tempfile.TemporaryDirectory() as tmp:
             data = {"path": "/", "train": ds["dir"], "val": ds["dir"], "test": ds["dir"],
                     "nc": len(names), "names": names}
             data_file = Path(tmp) / "bench.yaml"
             data_file.write_text(yaml.safe_dump(data))
             result = model.val(data=str(data_file), split="test", imgsz=imgsz, batch=batch,
-                               device=device, classes=ds["classes"], plots=False,
+                               device=device, classes=classes, plots=False,
                                verbose=False, project=tmp, name="val")
         box = result.box
         values = {"mAP50-95": box.map, "mAP50": box.map50, "precision": box.mp,
@@ -107,6 +118,7 @@ def evaluate(weights: Path, sets: list[dict], names: list[str], imgsz: int, batc
             for key, value in (("mAP50-95", ap), ("mAP50", ap50), ("precision", p),
                                ("recall", r)):
                 per_class[cls][key].append(float(value))
+                metrics[f"dsclass/{ds['name']}/{cls}/{key}"] = float(value)
         speeds.append((result.speed.get("inference", 0.0), ds["images"]))
     for key, values in overall.items():
         metrics[f"overall/{key}"] = sum(values) / len(values)
@@ -118,6 +130,32 @@ def evaluate(weights: Path, sets: list[dict], names: list[str], imgsz: int, batc
     return metrics
 
 
+def model_classes(model, names: list[str]) -> set[int]:
+    """Benchmark class ids the model can detect.
+
+    Class ids must mean the same in the model and the data (plate 0, face 1, car 2,
+    motorcycle 3); older plate + face models use the first two ids, which also match.
+    """
+    model_names = model.names if isinstance(model.names, dict) else dict(enumerate(model.names))
+    known = set()
+    for class_id, name in model_names.items():
+        if name in names:
+            if names.index(name) != int(class_id):
+                raise ValueError(f"model class {class_id} is {name!r}, but {name!r} is class "
+                                 f"{names.index(name)} in the benchmark data; remapping is "
+                                 "not supported")
+            known.add(int(class_id))
+    return known
+
+
+def weights_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # MLflow
 # ---------------------------------------------------------------------------
@@ -125,43 +163,45 @@ def _tracking() -> bool:
     return bool(os.environ.get("MLFLOW_TRACKING_URI"))
 
 
-def _cached(model: model_store.ResolvedModel, digest: str) -> dict[str, float] | None:
-    """Metrics of an earlier benchmark of the same model, version and data."""
+def _cached(sha256: str, digest: str) -> dict[str, float] | None:
+    """Metrics of an earlier benchmark of the same weights, version and data."""
     import mlflow
 
-    key = _model_key(model)
-    if key is None:
-        return None
     runs = mlflow.search_runs(
         experiment_names=[EXPERIMENT], output_format="list", max_results=1,
-        filter_string=(f"tags.`benchmark.model` = '{key}' and "
+        filter_string=(f"tags.`benchmark.weights_sha256` = '{sha256}' and "
                        f"tags.`benchmark.version` = '{BENCHMARK_VERSION}' and "
                        f"tags.`benchmark.data_digest` = '{digest}'"),
         order_by=["attributes.start_time DESC"])
     return dict(runs[0].data.metrics) if runs else None
 
 
-def _model_key(model: model_store.ResolvedModel) -> str | None:
-    """Stable identity of a model across benchmark runs (local files have none)."""
+def _model_key(model: model_store.ResolvedModel) -> str:
+    """Readable name of a model in benchmark runs (the cache uses the weights' hash)."""
     if model.registry:
         return f"models:/{model.registry[0]}/{model.registry[1]}"
-    if model.run_id:
+    if model.run_id and model.ref.startswith("runs:/"):
         return f"runs:/{model.run_id}"
-    return None
+    return model.ref
 
 
 def _log(model: model_store.ResolvedModel, metrics: dict, digest: str, sets: list[dict],
-         settings: dict) -> None:
+         settings: dict, sha256: str, catalog_id: str | None) -> None:
     import mlflow
     from mlflow import MlflowClient
 
     client = MlflowClient()
     mlflow.set_experiment(EXPERIMENT)
-    key = _model_key(model) or str(model.weights)
-    with mlflow.start_run(run_name=f"{BENCHMARK_VERSION} {key}"):
+    key = _model_key(model)
+    extra = {}
+    if model.run_id:
+        extra["benchmark.training_run"] = model.run_id
+    if catalog_id:
+        extra["benchmark.catalog_id"] = catalog_id
+    with mlflow.start_run(run_name=f"{BENCHMARK_VERSION} {catalog_id or key}"):
         mlflow.set_tags({"benchmark.version": BENCHMARK_VERSION,
                          "benchmark.data_digest": digest, "benchmark.model": key,
-                         **({"benchmark.training_run": model.run_id} if model.run_id else {})})
+                         "benchmark.weights_sha256": sha256, **extra})
         mlflow.log_params(settings)
         mlflow.log_metrics(metrics)
         mlflow.log_dict({"datasets": sets, "metrics": metrics}, "benchmark.json")
@@ -197,10 +237,24 @@ def print_table(results: list[tuple[str, dict]]) -> None:
         print(f"{key:<{width}}  " + "  ".join(row))
 
 
+def load_catalog(path: str) -> list[dict]:
+    """Entries of ``evaluation/models.yaml`` (each has at least ``id`` and ``ref``)."""
+    with open(path, "r", encoding="utf-8") as handle:
+        models = yaml.safe_load(handle)["models"]
+    ids = [m["id"] for m in models]
+    duplicates = {i for i in ids if ids.count(i) > 1}
+    if duplicates:
+        raise ValueError(f"duplicate ids in {path}: {sorted(duplicates)}")
+    return models
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evaluation.benchmark",
                                      description=__doc__.split("\n\n")[0])
-    parser.add_argument("models", nargs="+", help="file, runs:/<id>, models:/<name>@<alias> ...")
+    parser.add_argument("models", nargs="*",
+                        help="file, release:<tag>, runs:/<id>, models:/<name>@<alias> ...")
+    parser.add_argument("--catalog", help="also score every model listed in this YAML file "
+                                          "(evaluation/models.yaml)")
     parser.add_argument("--data", default="data.yaml")
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=16)
@@ -218,21 +272,31 @@ def main(argv: list[str] | None = None) -> int:
                 ", ".join(f"{s['name']} ({s['images']} images, classes "
                           f"{[names[c] for c in s['classes']]})" for s in sets))
     settings = {"imgsz": args.imgsz, "batch": args.batch, "data": args.data}
+    entries = [{"ref": ref} for ref in args.models]
+    if args.catalog:
+        entries += load_catalog(args.catalog)
+    if not entries:
+        parser.error("give at least one model or --catalog")
     results = []
-    for ref in args.models:
+    for entry in entries:
+        ref = entry["ref"]
         model = model_store.resolve(ref, args.models_dir)
+        if entry.get("run_id") and not model.run_id:
+            model.run_id = entry["run_id"]
+        sha256 = weights_sha256(model.weights)
+        label = entry.get("id") or ref
         metrics = None
         if _tracking() and not args.force:
-            metrics = _cached(model, digest)
+            metrics = _cached(sha256, digest)
             if metrics:
-                logger.info("%s: using the earlier %s result (--force to redo)", ref,
+                logger.info("%s: using the earlier %s result (--force to redo)", label,
                             BENCHMARK_VERSION)
         if metrics is None:
-            logger.info("%s: evaluating %s", ref, model.weights)
+            logger.info("%s: evaluating %s", label, model.weights)
             metrics = evaluate(model.weights, sets, names, args.imgsz, args.batch, args.device)
             if _tracking() and not args.no_log:
-                _log(model, metrics, digest, sets, settings)
-        results.append((ref, metrics))
+                _log(model, metrics, digest, sets, settings, sha256, entry.get("id"))
+        results.append((label, metrics))
     print_table(results)
     if args.json:
         Path(args.json).write_text(json.dumps(dict(results), indent=2))
