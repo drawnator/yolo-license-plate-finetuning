@@ -168,6 +168,12 @@ What this says, and what it doesn't:
 - **v10 from July is still the best overall** (0.788), and also on faces. The
   36-hour pretrain and synthetic plates have not beaten it on human-labelled test data;
   their gain is on cars.
+- **On the FACE dataset, newer models are worse, and synthetic plates are a suspect.**
+  Every recent model scores below the May models there; V3 (nano, plate + face only) is
+  best at 0.705. The three models trained with synthetic plates (run-2026-08-16, v11 and
+  phase1-r2) are the bottom three, 0.59 to 0.63. The loss is plates in face photos: 0.44
+  to 0.51 against 0.60 for V3. This doesn't prove the synthetic plates are the cause, but
+  it is worth testing (the synthetic-data experiment of phase 4).
 - **The noise is unknown.** Each configuration was trained once. Differences of about
   0.01 between the top five may be within run-to-run variation.
 
@@ -197,7 +203,9 @@ model:
 - accuracy against speed, and score over time;
 - a sortable table with links to MLflow and the GitHub releases.
 
-The metric and the set of classes can be changed. A model is ranked only when it can
+The metric, the set of classes and the set of datasets can be changed (for example
+FACE only), and "Compare two scores" plots any two scores against each other: overall,
+a class, a dataset, or one class in one dataset (default: face against plate). A model is ranked only when it can
 detect every selected class, so the plate + face models V1 to v5 appear with "Plate +
 face".
 
