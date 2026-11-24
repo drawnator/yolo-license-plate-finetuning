@@ -7,6 +7,11 @@ benchmark, so any two models can be compared and downloaded later.
 Order matters: phases 1 to 3 make results trustworthy and cheap; only then is it worth
 running experiments (phase 4).
 
+**Status (2026-11-24):** the phase 1 baseline (`angelicam/phase1-baseline-r2`, registry
+version 2) finished and was benchmarked together with every earlier model, including the
+GitHub releases V1 to v11 (see "Results" below and the dashboard). It scores **below** the
+current champion, so it was not promoted.
+
 **Status (2026-11-20):** the first phase 1 baseline ran without pseudo-labels (item 3
 below); it was kept as the "no pseudo-labels" data point and the baseline was restarted
 with the old teacher settings.
@@ -133,6 +138,77 @@ separate benchmark is.
    5. Teachers from COCO weights instead of the pretrain: is stage 1 worth 36 hours?
    6. Larger `imgsz` on the 16 GB machine.
 
+## Results (benchmark v1, 2026-11-24)
+
+All 16 models in `evaluation/models.yaml` were scored with the same benchmark; the full
+table, per class and per dataset, is in `evaluation/results/benchmark_v1.csv` and the
+dashboard. mAP50-95 on all four classes (models that detect only plate and face are
+compared on those two in the dashboard):
+
+| Model | Made | Overall | Plate | Face | Car | Motorcycle |
+|---|---|---|---|---|---|---|
+| v10 | 2026-07, first pseudo-label pipeline | **0.788** | 0.749 | **0.784** | 0.832 | 0.697 |
+| v11 (registry v1, `@champion`) | 2026-11-18, pretrain + teachers + synthetic | 0.785 | **0.750** | 0.752 | 0.851 | 0.689 |
+| no-pseudo-partial | 2026-11-19, no pseudo-labels, 38 epochs | 0.780 | 0.746 | 0.751 | 0.849 | 0.674 |
+| v9 | 2026-06, real labels only | 0.778 | 0.745 | 0.743 | 0.815 | **0.727** |
+| phase1-r2 (registry v2, `@candidate`) | 2026-11-21, phase 1 fixes | 0.769 | 0.725 | 0.739 | **0.855** | 0.671 |
+
+What this says, and what it doesn't:
+
+- **The phase 1 baseline is 0.016 below v11.** The loss is mostly plates (FACE images:
+  0.44 against 0.51) and faces; cars improved slightly.
+- **The training data was nearly the same; validation was not.** Both trained on about
+  6,000 pseudo-labels in the train split (5,957 for phase1-r2, 5,938 for v11; v11's other
+  6,865 were in val and test). But v11 was validated partly against teacher labels, and
+  validation decides early stopping and which epoch becomes `best.pt`. phase1-r2
+  early-stopped at epoch 38 (best epoch 18), while v11 trained 66 epochs (best 46).
+  Training length is therefore the most likely cause, not the pseudo-labels themselves.
+- **Pseudo-labels did not help here.** The accidental run without pseudo-labels, also
+  stopped at epoch 38, scored 0.780: above phase1-r2 and close to v11.
+- **v10 from July is still the best overall** (0.788), and also on faces. The
+  36-hour pretrain and synthetic plates have not beaten it on human-labelled test data;
+  their gain is on cars.
+- **The noise is unknown.** Each configuration was trained once. Differences of about
+  0.01 between the top five may be within run-to-run variation.
+
+Next steps, in order:
+
+1. **Measure the noise:** train the phase1-r2 configuration a second time with another
+   seed (final stage only, about 10 hours). Without this, no difference under about
+   0.02 can be trusted.
+2. **Early stopping:** with human labels only, validation peaked at epoch 18 and the run
+   stopped at 38 (v11: 46 of 66). Either the final stage now stops too early, or the
+   smaller real-only validation set is noisy. Try `patience=40`, or a fixed number of
+   epochs.
+3. **No pseudo-labels, trained to the end** (`--no-pseudo-labels`): the partial run
+   suggests stage 2 is not worth its cost.
+4. Only then the experiments of phase 4.
+
+Promotion is a manual decision: v11 stays `@champion`. v10 is not in the registry; to
+make it the champion, register its MLflow run (`0d28cb9d…`) as a new version first.
+
+## Dashboard
+
+`python3 -m evaluation.dashboard` (http://localhost:8000) compares every benchmarked
+model:
+
+- ranked bars;
+- a table of differences to a chosen baseline, per class and per dataset;
+- accuracy against speed, and score over time;
+- a sortable table with links to MLflow and the GitHub releases.
+
+The metric and the set of classes can be changed. A model is ranked only when it can
+detect every selected class, so the plate + face models V1 to v5 appear with "Plate +
+face".
+
+It reads `evaluation/results/benchmark_v1.csv`. To add a model:
+1. Add it to `evaluation/models.yaml`.
+2. Run the benchmark with `--catalog evaluation/models.yaml` (models already scored are
+   skipped, by the hash of their weights).
+3. Run `python -m evaluation.export_results`.
+
+The commands are in the README, under "Evaluation".
+
 ## Decisions (defaults taken 2026-11-19; change if needed)
 
 - Registry model name: `license-plate-detector` (override with `MLFLOW_REGISTERED_MODEL`).
@@ -172,8 +248,10 @@ docker run --rm --gpus all --memory=16g --shm-size=8g \
   license-plate-detector@champion license-plate-detector@candidate
 ```
 
-Each model is evaluated once per benchmark version; later comparisons reuse the stored
-result. The scores also appear as `bench.v1.*` tags on the training run and the registry
+Each weights file is evaluated once per benchmark version (results are cached by its
+SHA-256); later comparisons reuse the stored result. Besides registry references, the
+benchmark takes `release:<tag>` (a GitHub release), `runs:/<id>`, a file, or
+`--catalog evaluation/models.yaml` for every listed model. The scores also appear as `bench.v1.*` tags on the training run and the registry
 version. To promote a model: set the `champion` alias on its version in the MLflow UI.
 
 **Download a model:** `python -m evaluation.model_store license-plate-detector@champion`

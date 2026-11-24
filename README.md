@@ -49,6 +49,11 @@ yolo-license-plate-finetuning/
 │   └── train_yolov12.py              # YOLOv12 fine-tuning script
 │
 ├── evaluation/
+│   ├── benchmark.py                  # Fixed benchmark, results logged to MLflow
+│   ├── models.yaml                   # Every model to compare (releases, MLflow runs, registry)
+│   ├── model_store.py                # Download weights: release, MLflow run or registry
+│   ├── export_results.py             # Benchmark results -> evaluation/results/*.csv
+│   ├── dashboard/                    # Local comparison dashboard (python -m evaluation.dashboard)
 │   ├── evaluate.py                   # Single-model evaluation
 │   └── compare_models.py             # Multi-model comparison + chart
 │
@@ -251,6 +256,33 @@ All training scripts accept the same core arguments:
 ---
 
 ## Evaluation
+
+### Benchmark and dashboard (recommended)
+
+All models, old and new, are scored the same way on the test splits with human labels
+only (`evaluation/benchmark.py`), and compared in a local dashboard:
+
+```bash
+# 1. score every model in evaluation/models.yaml (each weights file only once)
+docker run --rm --gpus all --memory=16g --shm-size=8g \
+  -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip \
+  -v "$PWD/datasets:/datasets" -v "$PWD/models:/models" -v "$PWD/angelicam:/angelicam" \
+  -v "$PWD/evaluation:/evaluation" -e MODELS_DIR=/models \
+  --entrypoint python yolo-train:latest -m evaluation.benchmark --catalog evaluation/models.yaml
+
+# 2. collect the results from MLflow into evaluation/results/benchmark_v1.csv
+docker run --rm -e MLFLOW_TRACKING_URI=https://mlflow.guilherme.zip \
+  -v "$PWD/models:/models" -v "$PWD/evaluation:/evaluation" -e MODELS_DIR=/models \
+  --entrypoint python yolo-train:latest -m evaluation.export_results
+
+# 3. open the dashboard (standard library only, no Docker needed)
+python3 -m evaluation.dashboard            # http://localhost:8000
+```
+
+Over SSH, forward the port first (`ssh -L 8000:localhost:8000 <host>`). To add a model,
+add an entry to `evaluation/models.yaml` (a GitHub release, an MLflow run, a registry
+version or a file) and repeat steps 1 and 2. See `training/IMPROVEMENT_PLAN.md` for how
+the benchmark is defined.
 
 ### Single model
 

@@ -3,6 +3,14 @@
 Findings from the memory tests of 2026-11-15 and the full runs started on 2026-11-16.
 They explain the settings in `run_full.sh`, which is the launcher to use on this machine.
 
+**Since 2026-11-20** the machine is used remotely over SSH, as the Windows user `g`, with
+the **Docker Engine installed inside WSL** (not Docker Desktop). `run_full.sh` works
+unchanged; `docker run --gpus all` reaches the card through the NVIDIA container toolkit.
+Images built under Docker Desktop are not visible to this engine, so the first launch
+rebuilds `yolo-train:latest` (about 5 minutes). Commits are pushed over SSH
+(`git push git@github.com:drawnator/yolo-license-plate-finetuning.git main`, key
+`~/.ssh/id_ed25519`); the MLflow server accepts this machine without a password.
+
 ## Short version
 
 ```bash
@@ -159,7 +167,11 @@ tail -50 runs/logs/yolo-train.log
 - WSL exports `NAME` as the hostname (`bh02`), so scripts must not use `$NAME` as an
   input variable. `run_full.sh` uses `TRAIN_NAME` for that reason.
 - `--base-model` does not change the pretrain model; `yolo26l` is hardcoded for stage 1.
-- One-epoch teachers are too weak to propose any pseudo-labels. With no label set, the
-  final stage falls back to `data.yaml` without failing, so check the log for
-  `proposed=` and `merged=True` after stage 2.
+- Teachers that are too weak propose no pseudo-labels: one-epoch teachers, and also the
+  teachers fine-tuned with `lr0=0.001` (see `training/IMPROVEMENT_PLAN.md`, phase 1
+  item 3). Since 2026-11-20 the final stage then stops with an error instead of quietly
+  training on `data.yaml`; still check the log for `proposed=` and `merged=True` after
+  stage 2 (the 2026-11-20 baseline: `proposed=5957`).
+- A shutdown of the Windows machine stops the container; it does not restart by itself.
+  Re-run the same `run_full.sh` command to resume.
 - The `Python.h` message from triton at startup is harmless.
